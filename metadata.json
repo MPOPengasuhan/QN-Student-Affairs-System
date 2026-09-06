@@ -1,0 +1,10 @@
+{
+  "name": "QN Student Affairs System",
+  "description": "Sistem presensi kehadiran santri QR code terhubung langsung Google Sheets, manajemen data dewan asatidz/guru, kamar asrama, dan rekapitulasi kehadiran.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
