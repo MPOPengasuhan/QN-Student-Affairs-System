@@ -117,8 +117,8 @@ export default function App() {
   const today = getTodayDateStr();
   const todayRecords = records.filter((r) => r.date === today);
 
-  const handleLogin = (username: string, password: string) => {
-    const res = storageService.authenticateUser(username, password);
+  const handleLogin = async (username: string, password: string) => {
+    const res = await storageService.authenticateUser(username, password);
     if (res.success && res.user) {
       setCurrentUser(res.user);
       // Determine initial screen based on role

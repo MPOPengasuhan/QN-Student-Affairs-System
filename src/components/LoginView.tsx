@@ -16,7 +16,7 @@ import { QOTRUN_NADA_LOGO_SVG } from '../data/mockData';
 interface LoginViewProps {
   settings: SchoolSettings;
   teachers: Teacher[];
-  onLogin: (username: string, password: string) => { success: boolean; user?: UserAccount; message: string };
+  onLogin: (username: string, password: string) => Promise<{ success: boolean; user?: UserAccount; message: string }> | { success: boolean; user?: UserAccount; message: string };
   onBackToLanding: () => void;
 }
 
@@ -33,7 +33,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [showTeacherCodeModal, setShowTeacherCodeModal] = useState(false);
   const [teacherSearchQuery, setTeacherSearchQuery] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -49,13 +49,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      const result = onLogin(username.trim(), password);
+    try {
+      const result = await onLogin(username.trim(), password);
       setIsLoading(false);
       if (!result.success) {
         setErrorMsg(result.message);
       }
-    }, 200);
+    } catch (err) {
+      setIsLoading(false);
+      setErrorMsg('Terjadi kesalahan saat memproses login ke database Supabase.');
+    }
   };
 
   const filteredTeachers = React.useMemo(() => {

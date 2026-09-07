@@ -165,7 +165,7 @@ export interface RoomAssignmentSubmission {
 
 export interface ActivityLog {
   id: string;
-  type: 'presensi' | 'kamar' | 'laporan_kamar' | 'user' | 'approval' | 'system' | 'santri' | 'guru' | 'google_sheets';
+  type: 'presensi' | 'kamar' | 'pendataan_kamar' | 'laporan_kamar' | 'user' | 'approval' | 'system' | 'santri' | 'guru' | 'google_sheets';
   category?: 'presensi' | 'pendataan_kamar' | 'laporan_kamar' | 'user' | 'system' | 'santri' | 'guru' | 'kamar' | 'google_sheets';
   title?: string;
   action: string;
