@@ -28,7 +28,6 @@ import {
   getTodayDateStr,
   QOTRUN_NADA_LOGO_SVG,
 } from '../data/mockData';
-import { googleAppsScriptApi } from './googleAppsScriptApi';
 
 const STUDENTS_KEY = 'presensi_students_v2';
 const ATTENDANCE_KEY = 'presensi_records_v2';
@@ -164,14 +163,14 @@ class StorageService {
   private isSseActive: boolean = false;
 
   // In-memory cache for ultra-fast UI response (master state hosted online on cloud server)
-  private cachedStudents: Student[] = deduplicateStudentsList(sampleSantriList);
-  private cachedTeachers: Teacher[] = deduplicateTeachersList(initialTeachers);
-  private cachedRooms: Room[] = deduplicateRoomsList(initialRooms);
-  private cachedRecords: AttendanceRecord[] = generateInitialAttendance();
+  private cachedStudents: Student[] = [];
+  private cachedTeachers: Teacher[] = [];
+  private cachedRooms: Room[] = [];
+  private cachedRecords: AttendanceRecord[] = [];
   private cachedSettings: SchoolSettings = initialSchoolSettings;
   private cachedUsers: UserAccount[] = initialUsers;
-  private cachedRoomAssignments: RoomAssignmentSubmission[] = initialApprovalSubmissions;
-  private cachedActivityLogs: ActivityLog[] = initialActivityLogs;
+  private cachedRoomAssignments: RoomAssignmentSubmission[] = [];
+  private cachedActivityLogs: ActivityLog[] = [];
   private cachedCurrentUser: UserAccount | null = null;
 
   constructor() {
@@ -213,7 +212,13 @@ class StorageService {
       const rawSession = localStorage.getItem(AUTH_SESSION_KEY);
       if (rawSession) {
         try {
-          this.cachedCurrentUser = JSON.parse(rawSession);
+          const parsed = JSON.parse(rawSession);
+          if (parsed && parsed.username === 'admin') {
+            this.cachedCurrentUser = this.cachedUsers.find((u) => u.username === 'admin') || null;
+          } else {
+            localStorage.removeItem(AUTH_SESSION_KEY);
+            this.cachedCurrentUser = null;
+          }
         } catch {
           this.cachedCurrentUser = null;
         }
@@ -371,55 +376,18 @@ class StorageService {
     }
   }
 
-  // Pull master data directly from Google Apps Script Web App (MASTER_SANTRI, MASTER_GURU, MASTER_KAMAR, LOG_ACTIVITY)
+  // Master data synchronization from Google Apps Script has been disabled
   async syncFromGoogleMaster(): Promise<{ success: boolean; message: string; counts: { students: number; teachers: number; rooms: number; logs: number } }> {
-    try {
-      const [fetchedStudents, fetchedTeachers, fetchedRooms, fetchedLogs] = await Promise.all([
-        googleAppsScriptApi.getStudents().catch(() => []),
-        googleAppsScriptApi.getTeachers().catch(() => []),
-        googleAppsScriptApi.getRooms().catch(() => []),
-        googleAppsScriptApi.getLogs().catch(() => []),
-      ]);
-
-      if (fetchedStudents.length > 0) {
-        this.cachedStudents = deduplicateStudentsList(fetchedStudents);
-      }
-      if (fetchedTeachers.length > 0) {
-        this.cachedTeachers = deduplicateTeachersList(fetchedTeachers);
-      }
-      if (fetchedRooms.length > 0) {
-        this.cachedRooms = deduplicateRoomsList(fetchedRooms);
-      }
-      if (fetchedLogs.length > 0) {
-        this.cachedActivityLogs = fetchedLogs;
-      }
-
-      this.saveToLocalStorage();
-      this.notify();
-      this.pushAllToServer().catch(() => {});
-
-      return {
-        success: true,
-        message: `Sinkronisasi berhasil! ${fetchedStudents.length} santri, ${fetchedTeachers.length} guru, ${fetchedRooms.length} kamar dimuat dari Google Sheets.`,
-        counts: {
-          students: this.cachedStudents.length,
-          teachers: this.cachedTeachers.length,
-          rooms: this.cachedRooms.length,
-          logs: this.cachedActivityLogs.length,
-        },
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        message: `Gagal sinkronisasi dari Google Sheets: ${err.message}`,
-        counts: {
-          students: this.cachedStudents.length,
-          teachers: this.cachedTeachers.length,
-          rooms: this.cachedRooms.length,
-          logs: this.cachedActivityLogs.length,
-        },
-      };
-    }
+    return {
+      success: true,
+      message: 'Integrasi Google Sheets dinonaktifkan.',
+      counts: {
+        students: this.cachedStudents.length,
+        teachers: this.cachedTeachers.length,
+        rooms: this.cachedRooms.length,
+        logs: this.cachedActivityLogs.length,
+      },
+    };
   }
 
   // Force full sync of all data to server
@@ -643,16 +611,6 @@ class StorageService {
           metadata: newLog.metadata,
         }),
       }).catch(() => {});
-    } catch {}
-
-    // Direct secondary dispatch to Google Sheets LOG_ACTIVITY
-    try {
-      googleAppsScriptApi.logActivity(
-        newLog.performedBy,
-        newLog.action,
-        newLog.description,
-        newLog.category
-      ).catch(() => {});
     } catch {}
   }
 
@@ -1114,13 +1072,10 @@ class StorageService {
       body: JSON.stringify(teacher),
     }).catch(() => {});
 
-    // Direct push to Google Sheets MASTER_GURU
-    googleAppsScriptApi.saveTeacher(teacher, this.cachedCurrentUser?.name || 'Admin').catch(() => {});
-
     this.addActivityLog(
       'guru',
       'Perubahan Data Guru',
-      `Data ustadz/ustadzah ${teacher.name} (${teacher.teacherCode || teacher.nip || '-'}) berhasil disimpan ke database terpusat spreadsheet.`,
+      `Data ustadz/ustadzah ${teacher.name} (${teacher.teacherCode || teacher.nip || '-'}) berhasil disimpan.`,
       this.cachedCurrentUser?.name || 'Admin',
       'guru'
     );
@@ -1240,13 +1195,10 @@ class StorageService {
       body: JSON.stringify(room),
     }).catch(() => {});
 
-    // Direct push to Google Sheets MASTER_KAMAR
-    googleAppsScriptApi.saveRoom(room, this.cachedCurrentUser?.name || 'Admin').catch(() => {});
-
     this.addActivityLog(
       'kamar',
       'Perubahan Data Kamar',
-      `Data kamar ${room.roomNumber} (${room.building || room.location || '-'}) berhasil disimpan ke database terpusat spreadsheet.`,
+      `Data kamar ${room.roomNumber} (${room.building || room.location || '-'}) berhasil disimpan.`,
       this.cachedCurrentUser?.name || 'Admin',
       'kamar'
     );
@@ -1350,13 +1302,10 @@ class StorageService {
       body: JSON.stringify(student),
     }).catch(() => {});
 
-    // Direct push to Google Sheets MASTER_SANTRI
-    googleAppsScriptApi.saveStudent(student, this.cachedCurrentUser?.name || 'Admin').catch(() => {});
-
     this.addActivityLog(
       'santri',
       'Perubahan Data Santri',
-      `Data santri ${student.name} (${student.className || '-'}) berhasil disimpan ke database terpusat Google Spreadsheet.`,
+      `Data santri ${student.name} (${student.className || '-'}) berhasil disimpan.`,
       this.cachedCurrentUser?.name || 'Admin',
       'santri'
     );
@@ -1694,16 +1643,16 @@ class StorageService {
     return true;
   }
 
-  // Reset all to sample data
+  // Reset all data to clean empty state
   resetAllData() {
-    this.cachedStudents = sampleSantriList;
-    this.cachedTeachers = initialTeachers;
-    this.cachedRooms = initialRooms;
-    this.cachedRecords = generateInitialAttendance();
+    this.cachedStudents = [];
+    this.cachedTeachers = [];
+    this.cachedRooms = [];
+    this.cachedRecords = [];
     this.cachedSettings = initialSchoolSettings;
     this.cachedUsers = initialUsers;
-    this.cachedRoomAssignments = initialApprovalSubmissions;
-    this.cachedActivityLogs = initialActivityLogs;
+    this.cachedRoomAssignments = [];
+    this.cachedActivityLogs = [];
 
     this.saveToLocalStorage();
     this.notify();
@@ -1715,7 +1664,7 @@ class StorageService {
   }
 
   loadSampleSantri() {
-    this.cachedStudents = sampleSantriList;
+    this.cachedStudents = [];
     this.saveToLocalStorage();
     this.notify();
     this.pushAllToServer().catch(() => {});
@@ -2089,4 +2038,3 @@ export const storageService = new StorageService();
 if (typeof window !== 'undefined') {
   storageService.init().catch(e => console.warn('StorageService auto-init:', e));
 }
-export { googleAppsScriptApi };

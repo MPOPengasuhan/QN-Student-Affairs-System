@@ -177,7 +177,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Contoh: GR146 / admin"
+                  placeholder="Contoh: admin"
                   className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white transition-all"
                   required
                 />
@@ -206,7 +206,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 />
               </div>
               <p className="text-[11px] text-slate-500 mt-1.5 font-medium">
-                *Password default guru: <span className="font-bold text-emerald-700">12345</span>
+                *Akun default: <span className="font-bold text-slate-800">admin</span> / <span className="font-bold text-emerald-700">12345</span>
               </p>
             </div>
 

@@ -247,7 +247,6 @@ export type AdminTab =
   | 'user_management'
   | 'activity_logs'
   | 'room_logs'
-  | 'googlesheets'
   | 'settings';
 
 export type ViewTab =
@@ -265,7 +264,6 @@ export type ViewTab =
   | 'teachers'
   | 'rooms'
   | 'rekap'
-  | 'googlesheets'
   | 'publish_center'
   | 'users'
   | 'activity_logs'

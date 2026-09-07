@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Student, Teacher, Room, AttendanceRecord, SchoolSettings, UserAccount } from '../types';
 import {
   Users,
@@ -94,6 +94,15 @@ export const DashboardMonitoringView: React.FC<DashboardMonitoringViewProps> = (
     return () => clearInterval(timer);
   }, []);
 
+  const handleManualRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    onRefresh();
+    setTimeout(() => {
+      setIsRefreshing(false);
+      setSecondsRemaining(autoRefreshInterval > 0 ? autoRefreshInterval : 30);
+    }, 600);
+  }, [onRefresh, autoRefreshInterval]);
+
   // Auto-refresh countdown logic
   useEffect(() => {
     if (autoRefreshInterval <= 0) return;
@@ -101,7 +110,9 @@ export const DashboardMonitoringView: React.FC<DashboardMonitoringViewProps> = (
     const interval = setInterval(() => {
       setSecondsRemaining((prev) => {
         if (prev <= 1) {
-          handleManualRefresh();
+          setTimeout(() => {
+            handleManualRefresh();
+          }, 0);
           return autoRefreshInterval;
         }
         return prev - 1;
@@ -109,16 +120,7 @@ export const DashboardMonitoringView: React.FC<DashboardMonitoringViewProps> = (
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [autoRefreshInterval]);
-
-  const handleManualRefresh = () => {
-    setIsRefreshing(true);
-    onRefresh();
-    setTimeout(() => {
-      setIsRefreshing(false);
-      setSecondsRemaining(autoRefreshInterval > 0 ? autoRefreshInterval : 30);
-    }, 600);
-  };
+  }, [autoRefreshInterval, handleManualRefresh]);
 
   // Fullscreen browser toggle
   const toggleFullscreen = () => {

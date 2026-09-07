@@ -327,17 +327,17 @@ function loadDatabase(): DatabaseSchema {
     if (fs.existsSync(DB_FILE_PATH)) {
       const raw = fs.readFileSync(DB_FILE_PATH, 'utf-8');
       const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.students) && parsed.students.length > 0) {
-        console.log(`[OnlineDB] Loaded database from persistent storage: ${parsed.students.length} students, ${parsed.teachers?.length || 0} teachers, ${parsed.rooms?.length || 0} rooms.`);
+      if (parsed && typeof parsed === 'object') {
+        console.log(`[OnlineDB] Loaded database from persistent storage: ${parsed.students?.length || 0} students, ${parsed.teachers?.length || 0} teachers, ${parsed.rooms?.length || 0} rooms.`);
         return {
-          students: deduplicateStudents(parsed.students),
-          teachers: deduplicateTeachers(parsed.teachers || initialTeachers),
-          rooms: deduplicateRooms(parsed.rooms || initialRooms),
-          records: Array.isArray(parsed.records) ? parsed.records : generateInitialAttendance(),
+          students: Array.isArray(parsed.students) ? deduplicateStudents(parsed.students) : [],
+          teachers: Array.isArray(parsed.teachers) ? deduplicateTeachers(parsed.teachers) : [],
+          rooms: Array.isArray(parsed.rooms) ? deduplicateRooms(parsed.rooms) : [],
+          records: Array.isArray(parsed.records) ? parsed.records : [],
           settings: parsed.settings ? { ...initialSchoolSettings, ...parsed.settings } : initialSchoolSettings,
-          users: Array.isArray(parsed.users) ? parsed.users : initialUsers,
-          roomAssignments: Array.isArray(parsed.roomAssignments) ? parsed.roomAssignments : initialApprovalSubmissions,
-          activityLogs: Array.isArray(parsed.activityLogs) ? parsed.activityLogs : initialActivityLogs,
+          users: initialUsers,
+          roomAssignments: Array.isArray(parsed.roomAssignments) ? parsed.roomAssignments : [],
+          activityLogs: Array.isArray(parsed.activityLogs) ? parsed.activityLogs : [],
           lastUpdated: parsed.lastUpdated || Date.now(),
         };
       }
@@ -347,14 +347,14 @@ function loadDatabase(): DatabaseSchema {
   }
 
   const initialDb: DatabaseSchema = {
-    students: deduplicateStudents(sampleSantriList),
-    teachers: deduplicateTeachers(initialTeachers),
-    rooms: deduplicateRooms(initialRooms),
-    records: generateInitialAttendance(),
+    students: [],
+    teachers: [],
+    rooms: [],
+    records: [],
     settings: initialSchoolSettings,
     users: initialUsers,
-    roomAssignments: initialApprovalSubmissions,
-    activityLogs: initialActivityLogs,
+    roomAssignments: [],
+    activityLogs: [],
     lastUpdated: Date.now(),
   };
 
@@ -380,284 +380,20 @@ function saveDatabase() {
   broadcastUpdate();
 }
 
-// --- Google Sheets Master Database Synchronization Engine ---
-async function fetchGoogleSheetData(sheetName: string, customUrl?: string): Promise<any[]> {
-  const targetUrl = customUrl || db.settings.googleSheetWebhookUrl || DEFAULT_GOOGLE_WEB_APP_URL;
-  if (!targetUrl || !targetUrl.startsWith('http')) return [];
-
-  const fullUrl = `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}sheet=${encodeURIComponent(sheetName)}`;
-  try {
-    const res = await fetch(fullUrl, { headers: { 'Accept': 'application/json' } });
-    if (!res.ok) {
-      console.warn(`[GoogleSheets] Fetch ${sheetName} HTTP ${res.status}`);
-      return [];
-    }
-    const text = await res.text();
-    let data: any;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      console.warn(`[GoogleSheets] Failed to parse JSON for ${sheetName}:`, text.slice(0, 100));
-      return [];
-    }
-    if (Array.isArray(data)) return data;
-    if (data && Array.isArray(data.data)) return data.data;
-    return [];
-  } catch (err: any) {
-    console.error(`[GoogleSheets] Error fetching ${sheetName}:`, err.message);
-    return [];
-  }
-}
-
-async function postGoogleSheetData(sheetName: string, payload: any, customUrl?: string): Promise<any> {
-  const targetUrl = customUrl || db.settings.googleSheetWebhookUrl || DEFAULT_GOOGLE_WEB_APP_URL;
-  if (!targetUrl || !targetUrl.startsWith('http')) return { success: false, message: 'URL Web App tidak valid' };
-
-  try {
-    // Format JSON with structured { "sheet": sheetName, "action": "CREATE", "user": "...", "data": { ... } }
-    const action = payload.action || 'CREATE';
-    const user = payload.user || payload.performedBy || 'Pengguna';
-    const dataContent = payload.data || { ...payload };
-
-    const bodyPayload = {
-      sheet: sheetName,
-      action,
-      user,
-      data: dataContent,
-      ...dataContent,
-    };
-
-    const res = await fetch(targetUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(bodyPayload),
-    });
-    const text = await res.text();
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { success: res.ok, raw: text };
-    }
-  } catch (err: any) {
-    console.error(`[GoogleSheets] Error posting to ${sheetName}:`, err.message);
-    return { success: false, error: err.message };
-  }
-}
-
-async function syncAllFromGoogleMasterSheets(customUrl?: string): Promise<{
+// Integrasi Google Sheets dinonaktifkan
+async function syncAllFromGoogleMasterSheets(_customUrl?: string): Promise<{
   success: boolean;
   message: string;
   counts: { students: number; teachers: number; rooms: number };
 }> {
-  console.log('[GoogleSheets] Starting master data synchronization from Google Sheets...');
-  try {
-    const [rawGuru, rawKamar, rawSantri] = await Promise.all([
-      fetchGoogleSheetData('MASTER_GURU', customUrl),
-      fetchGoogleSheetData('MASTER_KAMAR', customUrl),
-      fetchGoogleSheetData('MASTER_SANTRI', customUrl),
-    ]);
-
-    let teachersCount = 0;
-    let roomsCount = 0;
-    let studentsCount = 0;
-
-    // 1. Process MASTER_GURU (kolom: no, kode_guru, nama_guru, jk, status, jabatan, ket)
-    if (Array.isArray(rawGuru) && rawGuru.length > 0) {
-      const parsedTeachers: Teacher[] = rawGuru
-        .filter(r => r && (r.nama_guru || r.kode || r.kode_guru))
-        .map((r, idx) => {
-          const code = String(r.kode || r.kode_guru || `GR${String(idx + 1).padStart(3, '0')}`).trim();
-          const name = String(r.nama_guru || '').trim();
-          const gender: 'L' | 'P' = String(r.jk || '').toUpperCase() === 'P' ? 'P' : 'L';
-          const status = String(r.status || 'AKTIF').trim();
-          const jabatan = String(r.jabatan || 'Guru').trim();
-          const ket = String(r.ket || '-').trim();
-
-          let role: Teacher['role'] = 'Guru';
-          const jabLower = jabatan.toLowerCase();
-          if (jabLower.includes('pimpinan')) role = 'Pimpinan';
-          else if (jabLower.includes('kamar') || jabLower.includes('musyrif')) role = 'Wali Kamar';
-          else if (jabLower.includes('pengasuhan')) role = 'Pengasuhan';
-          else if (gender === 'P') role = 'Ustadzah';
-          else role = 'Ustadz';
-
-          return {
-            id: `tch-${code}`,
-            teacherCode: code,
-            nip: code,
-            name,
-            gender,
-            status,
-            position: jabatan,
-            positionDetail: ket,
-            subject: jabatan,
-            phone: ket !== '-' && ket.length > 5 ? ket : '(021) 7788-9900',
-            role,
-            qrCodeData: code,
-            createdAt: new Date().toISOString(),
-          };
-        });
-
-      if (parsedTeachers.length > 0) {
-        db.teachers = deduplicateTeachers(parsedTeachers);
-        teachersCount = db.teachers.length;
-
-        // Auto-provision user accounts for teachers if not already present
-        parsedTeachers.forEach((t) => {
-          const existingUser = db.users.find(
-            (u) =>
-              u.teacherCode?.toUpperCase() === t.teacherCode.toUpperCase() ||
-              u.username.toUpperCase() === t.teacherCode.toUpperCase()
-          );
-          if (!existingUser) {
-            let roleStr = 'GURU';
-            const posLower = (t.position || '').toLowerCase();
-            if (posLower.includes('pimpinan')) roleStr = 'PIMPINAN';
-            else if (posLower.includes('wali kelas')) roleStr = 'WALI_KELAS';
-            else if (posLower.includes('musyrif') || posLower.includes('kamar')) roleStr = 'WALI_KAMAR';
-            else if (posLower.includes('pengasuhan') || posLower.includes('pembina')) roleStr = 'PEMBINA';
-
-            db.users.push({
-              id: `usr-${t.teacherCode}`,
-              username: t.teacherCode,
-              name: t.name,
-              password: 'admin', // default credentials
-              role: roleStr,
-              gender: t.gender,
-              teacherCode: t.teacherCode,
-              nip: t.nip,
-              phone: t.phone,
-              position: t.position,
-              positionDetail: t.positionDetail,
-              isActive: true,
-              createdAt: new Date().toISOString(),
-            });
-          }
-        });
-      }
-    }
-
-    // 2. Process MASTER_KAMAR (kolom: no, nama_kamar, lokasi, kode_kamar, jk)
-    if (Array.isArray(rawKamar) && rawKamar.length > 0) {
-      const parsedRooms: Room[] = rawKamar
-        .filter(r => r && (r.nama_kamar || r.kode_kamar))
-        .map((r, idx) => {
-          const roomCode = String(r.kode_kamar || `KM-${idx + 1}`).trim();
-          const roomName = String(r.nama_kamar || `Kamar ${roomCode}`).trim();
-          const location = String(r.lokasi || 'QN1').trim();
-          const gender: 'L' | 'P' = String(r.jk || '').toUpperCase() === 'P' ? 'P' : 'L';
-          const building = location === 'QN1' ? 'Kampus QN1 (Putri)' : (location === 'QN2' ? 'Kampus QN2 (Putra)' : `Kampus ${location}`);
-
-          // Preserve existing supervisor if assigned
-          const existingRoom = db.rooms.find(ex => ex.roomCode === roomCode || ex.roomNumber === roomName);
-
-          return {
-            id: `rm-${roomCode}`,
-            roomNumber: roomName,
-            roomCode,
-            location,
-            gender,
-            building,
-            capacity: existingRoom?.capacity || 20,
-            supervisorName: existingRoom?.supervisorName || '-',
-            supervisorCode: existingRoom?.supervisorCode,
-            supervisorPhone: existingRoom?.supervisorPhone,
-            description: `Kamar ${roomName} (${roomCode}) ${building}`,
-            isFilled: existingRoom?.isFilled || false,
-            createdAt: new Date().toISOString(),
-          };
-        });
-
-      if (parsedRooms.length > 0) {
-        db.rooms = parsedRooms;
-        roomsCount = parsedRooms.length;
-      }
-    }
-
-    // 3. Process MASTER_SANTRI (kolom: no, nip_pondok, nama_santri, kelas, jk, tempat_lokasi, idb, nomor_kartu, qr_code, id_izin)
-    if (Array.isArray(rawSantri) && rawSantri.length > 0) {
-      // Build quick lookup for existing student room placement to keep room assignments
-      const existingRoomMap = new Map<string, string>();
-      db.students.forEach(s => {
-        if (s.roomName && s.roomName !== '-') {
-          if (s.nipPondok) existingRoomMap.set(s.nipPondok, s.roomName);
-          if (s.nis) existingRoomMap.set(s.nis, s.roomName);
-          if (s.idb) existingRoomMap.set(s.idb, s.roomName);
-        }
-      });
-
-      const parsedStudents: Student[] = rawSantri
-        .filter(r => r && (r.nama_santri || r.nip_pondok || r.no_kartu || r.qr_code))
-        .map((r, idx) => {
-          const nipPondok = String(r.nip_pondok || '').trim();
-          const name = String(r.nama_santri || `Santri ${idx + 1}`).trim();
-          const className = String(r.kelas || '1-1').trim();
-          const gender: 'L' | 'P' = String(r.jk || '').toUpperCase() === 'P' ? 'P' : 'L';
-          const tempat = String(r.tempat || r.tempat_lokasi || 'QN1').trim();
-          const idb = String(r.idb || '').trim();
-          const noKartu = String(r.no_kartu || r.nomor_kartu || '').trim();
-          const qrCode = String(r.qr_code || nipPondok || idb || `ST-${idx + 1}`).trim();
-          const idIzin = String(r.id_izin || '').trim();
-
-          const assignedRoom = existingRoomMap.get(nipPondok) || existingRoomMap.get(idb) || existingRoomMap.get(noKartu) || '-';
-
-          return {
-            id: `st-${nipPondok || idb || idx + 1}`,
-            nis: nipPondok || noKartu || idb || `ST-${idx + 1}`,
-            nipPondok,
-            name,
-            className,
-            gender,
-            tempat,
-            idb,
-            noKartu,
-            qrCodeData: qrCode,
-            idIzin,
-            roomName: assignedRoom,
-            parentPhone: '-',
-            createdAt: new Date().toISOString(),
-          };
-        });
-
-      if (parsedStudents.length > 0) {
-        db.students = parsedStudents;
-        studentsCount = parsedStudents.length;
-      }
-    }
-
-    db.settings.lastGoogleSync = new Date().toISOString();
-    db.settings.googleSheetWebhookUrl = customUrl || db.settings.googleSheetWebhookUrl || DEFAULT_GOOGLE_WEB_APP_URL;
-
-    // Log Activity
-    db.activityLogs.unshift({
-      id: `log-sync-${Date.now()}`,
-      type: 'system',
-      category: 'google_sheets',
-      action: 'Sinkronisasi Master DB Google Sheets',
-      description: `Sinkronisasi terpusat berhasil: ${studentsCount} santri (MASTER_SANTRI), ${teachersCount} guru (MASTER_GURU), ${roomsCount} kamar (MASTER_KAMAR).`,
-      performedBy: 'Sistem Sinkronisasi Google Sheets',
-      timestamp: new Date().toISOString(),
-    });
-
-    saveDatabase();
-    console.log(`[GoogleSheets] Sync finished: ${studentsCount} santri, ${teachersCount} guru, ${roomsCount} kamar.`);
-
-    return {
-      success: true,
-      message: `Sinkronisasi Google Sheets terpusat berhasil: ${studentsCount} Santri, ${teachersCount} Guru, dan ${roomsCount} Kamar terbarui.`,
-      counts: { students: studentsCount, teachers: teachersCount, rooms: roomsCount },
-    };
-  } catch (err: any) {
-    console.error('[GoogleSheets] Master sync error:', err);
-    return {
-      success: false,
-      message: `Gagal sinkronisasi Google Sheets: ${err.message}`,
-      counts: { students: 0, teachers: 0, rooms: 0 },
-    };
-  }
+  return {
+    success: false,
+    message: 'Integrasi Google Sheets dinonaktifkan.',
+    counts: { students: 0, teachers: 0, rooms: 0 },
+  };
 }
 
-// Background Google Sheets Activity Logger & Dispatcher
+// Background Activity Logger
 async function logActivityToGoogleSheets(
   user: string,
   aksi: string,
@@ -681,47 +417,12 @@ async function logActivityToGoogleSheets(
   db.activityLogs.unshift(newLog);
   if (db.activityLogs.length > 1000) db.activityLogs = db.activityLogs.slice(0, 1000);
   saveDatabase();
-
-  // Send directly to Google Sheets LOG_ACTIVITY sheet
-  try {
-    postGoogleSheetData('LOG_ACTIVITY', {
-      timestamp,
-      user: user || 'Sistem',
-      aksi,
-      detail,
-    }).catch(e => console.warn('[LogActivity] Warning sending to Google Sheets LOG_ACTIVITY:', e.message));
-  } catch (err) {
-    // Ignore error
-  }
 }
 
-// Background Google Sheets Webhook Dispatcher
-async function forwardToGoogleSheetsWebhook(payload: any) {
-  const webhookUrl = db.settings.googleSheetWebhookUrl || DEFAULT_GOOGLE_WEB_APP_URL;
-  if (!webhookUrl || !webhookUrl.startsWith('http')) return;
-
-  try {
-    const res = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        timestamp: new Date().toISOString(),
-        schoolName: db.settings.schoolName,
-        action: payload.action || 'sync_all',
-        data: {
-          students: db.students,
-          teachers: db.teachers,
-          rooms: db.rooms,
-          records: db.records,
-          settings: db.settings,
-          ...payload,
-        },
-      }),
-    });
-    console.log('[GoogleSheetsWebhook] Push status:', res.status);
-  } catch (e) {
-    console.error('[GoogleSheetsWebhook] Error pushing:', e);
-  }
+// Background Webhook Dispatcher (No-op since Google Sheets integration is removed)
+async function forwardToGoogleSheetsWebhook(_payload: any) {
+  // Integrasi Google Sheets dinonaktifkan
+  return;
 }
 
 // -------------------------------------------------------------
@@ -970,19 +671,6 @@ app.post('/api/students', (req, res) => {
   }
 
   saveDatabase();
-  
-  // Post directly to Google Sheets MASTER_SANTRI
-  postGoogleSheetData('MASTER_SANTRI', {
-    nip_pondok: newStudent.nipPondok || newStudent.nis,
-    nama_santri: newStudent.name,
-    kelas: newStudent.className,
-    jk: newStudent.gender,
-    tempat_lokasi: newStudent.tempat || 'QN1',
-    idb: newStudent.idb || '',
-    nomor_kartu: newStudent.noKartu || '',
-    qr_code: newStudent.qrCodeData || newStudent.nis,
-    id_izin: newStudent.idIzin || '',
-  }).catch(() => {});
 
   // Log Activity
   logActivityToGoogleSheets(
@@ -1077,16 +765,6 @@ app.post('/api/teachers', (req, res) => {
 
   saveDatabase();
 
-  // Post directly to Google Sheets MASTER_GURU
-  postGoogleSheetData('MASTER_GURU', {
-    kode_guru: newTeacher.teacherCode || newTeacher.nip,
-    nama_guru: newTeacher.name,
-    jk: newTeacher.gender,
-    status: newTeacher.status || 'AKTIF',
-    jabatan: newTeacher.position || 'Guru',
-    ket: newTeacher.positionDetail || newTeacher.phone || '-',
-  }).catch(() => {});
-
   // Log Activity
   logActivityToGoogleSheets(
     'Admin',
@@ -1159,14 +837,6 @@ app.post('/api/rooms', (req, res) => {
   }
 
   saveDatabase();
-
-  // Post directly to Google Sheets MASTER_KAMAR
-  postGoogleSheetData('MASTER_KAMAR', {
-    nama_kamar: newRoom.roomNumber,
-    lokasi: newRoom.location || 'QN1',
-    kode_kamar: newRoom.roomCode || newRoom.roomNumber,
-    jk: newRoom.gender || 'L',
-  }).catch(() => {});
 
   // Log Activity
   logActivityToGoogleSheets(
@@ -1639,14 +1309,14 @@ app.post('/api/settings', (req, res) => {
 // Full Reset to Default Seed API
 app.post('/api/reset', (req, res) => {
   db = {
-    students: sampleSantriList,
-    teachers: initialTeachers,
-    rooms: initialRooms,
-    records: generateInitialAttendance(),
+    students: [],
+    teachers: [],
+    rooms: [],
+    records: [],
     settings: initialSchoolSettings,
     users: initialUsers,
-    roomAssignments: initialApprovalSubmissions,
-    activityLogs: initialActivityLogs,
+    roomAssignments: [],
+    activityLogs: [],
     lastUpdated: Date.now(),
   };
   saveDatabase();
@@ -1657,148 +1327,12 @@ app.post('/api/reset', (req, res) => {
 // Google Sheets Integration API Endpoints (GET ?sheet= & POST { sheet: })
 // -------------------------------------------------------------
 
-// 1. Fetch data from specific Google Sheet (e.g. ?sheet=MASTER_SANTRI, ?sheet=MASTER_GURU, ?sheet=MASTER_KAMAR)
-app.get('/api/googlesheets/fetch-sheet', async (req, res) => {
-  const sheetName = (req.query.sheet as string) || 'MASTER_SANTRI';
-  const customUrl = (req.query.url as string) || undefined;
-
-  try {
-    const data = await fetchGoogleSheetData(sheetName, customUrl);
-    res.json({
-      success: true,
-      sheet: sheetName,
-      count: data.length,
-      data,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      sheet: sheetName,
-      message: `Gagal membaca sheet ${sheetName}: ${err.message}`,
-    });
-  }
-});
-
-// 2. Save new data via POST to Google Sheet (includes { "sheet": "NAMA_SHEET", ... } in body)
-app.post('/api/googlesheets/save-sheet', async (req, res) => {
-  const { sheet, url, ...payload } = req.body;
-  const sheetName = sheet || 'MASTER_SANTRI';
-
-  try {
-    const result = await postGoogleSheetData(sheetName, payload, url);
-    res.json({
-      success: true,
-      sheet: sheetName,
-      message: result.message || `Data berhasil disimpan ke sheet ${sheetName}`,
-      result,
-    });
-  } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      sheet: sheetName,
-      message: `Gagal menyimpan ke sheet ${sheetName}: ${err.message}`,
-    });
-  }
-});
-
-// 3. Trigger full synchronization of all 3 Master Sheets from Google Sheets
-app.all(['/api/googlesheets/sync-all-master', '/api/googlesheets/sync-master'], async (req, res) => {
-  const url = (req.body?.url as string) || (req.query?.url as string) || undefined;
-  try {
-    const syncResult = await syncAllFromGoogleMasterSheets(url);
-    res.json({
-      ...syncResult,
-      totalStudents: db.students.length,
-      totalTeachers: db.teachers.length,
-      totalRooms: db.rooms.length,
-      lastUpdated: db.lastUpdated,
-    });
-  } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      message: `Gagal sinkronisasi master sheets: ${err.message}`,
-    });
-  }
-});
-
-// Direct Webhook Test & Forwarding Proxy for Google Apps Script Web App
-app.post('/api/googlesheets/sync-webhook', async (req, res) => {
-  const { webhookUrl, spreadsheetId, spreadsheetUrl, action = 'sync_all' } = req.body;
-  const targetUrl = webhookUrl || db.settings.googleSheetWebhookUrl || DEFAULT_GOOGLE_WEB_APP_URL;
-
-  if (!targetUrl || !targetUrl.startsWith('http')) {
-    return res.status(400).json({
-      success: false,
-      message: 'Tautan Google Apps Script Web App URL tidak valid atau belum diisi.',
-    });
-  }
-
-  try {
-    if (action === 'pull_data') {
-      const syncRes = await syncAllFromGoogleMasterSheets(targetUrl);
-      return res.json({
-        success: syncRes.success,
-        message: syncRes.message,
-        spreadsheetUrl: db.settings.googleSheetUrl || targetUrl,
-        details: {
-          students: db.students.length,
-          teachers: db.teachers.length,
-          rooms: db.rooms.length,
-        },
-      });
-    }
-
-    const payload = {
-      timestamp: new Date().toISOString(),
-      schoolName: db.settings.schoolName,
-      spreadsheetId: spreadsheetId || db.settings.googleSheetId || '',
-      spreadsheetUrl: spreadsheetUrl || db.settings.googleSheetUrl || '',
-      action,
-      data: {
-        students: db.students,
-        teachers: db.teachers,
-        rooms: db.rooms,
-        records: db.records,
-        settings: db.settings,
-      },
-    };
-
-    const scriptRes = await fetch(targetUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    const responseText = await scriptRes.text();
-    let responseData: any = {};
-    try {
-      responseData = JSON.parse(responseText);
-    } catch {
-      responseData = { raw: responseText };
-    }
-
-    db.settings.lastGoogleSync = new Date().toISOString();
-    if (webhookUrl) db.settings.googleSheetWebhookUrl = webhookUrl;
-    if (spreadsheetId) db.settings.googleSheetId = spreadsheetId;
-    if (responseData.spreadsheetUrl) db.settings.googleSheetUrl = responseData.spreadsheetUrl;
-    else if (spreadsheetUrl) db.settings.googleSheetUrl = spreadsheetUrl;
-
-    saveDatabase();
-
-    return res.json({
-      success: responseData.success !== false,
-      message: responseData.message || 'Sinkronisasi ke Google Apps Script Spreadsheet berhasil!',
-      spreadsheetUrl: responseData.spreadsheetUrl || db.settings.googleSheetUrl,
-      details: responseData,
-    });
-  } catch (error: any) {
-    console.error('Webhook sync proxy error:', error);
-    return res.status(500).json({
-      success: false,
-      message: `Gagal berkomunikasi dengan Google Apps Script: ${error.message}`,
-    });
-  }
+// Google Sheets Integration disabled
+app.all(['/api/googlesheets/*', '/api/googlesheets'], (req, res) => {
+  res.json({
+    success: false,
+    message: 'Integrasi Google Sheets dinonaktifkan.',
+  });
 });
 
 // Start Server and Attach Vite
@@ -1819,16 +1353,6 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Cloud Attendance Server listening on http://0.0.0.0:${PORT}`);
-    
-    // Automatically trigger initial Google Sheets master synchronization in background
-    setTimeout(() => {
-      syncAllFromGoogleMasterSheets().catch(e => console.warn('[GoogleSheets] Initial sync background error:', e.message));
-    }, 1000);
-
-    // Automated Central Polling: Check Google Sheets Master DB periodically every 12 seconds
-    setInterval(() => {
-      syncAllFromGoogleMasterSheets().catch(e => console.warn('[AutoSync] Background poll warning:', e.message));
-    }, 12000);
   });
 }
 

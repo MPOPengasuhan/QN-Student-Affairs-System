@@ -203,17 +203,15 @@ export const ActivityLogsView: React.FC<ActivityLogsViewProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={async () => {
-              setFeedback('Sedang menyinkronkan data log dari Google Sheets LOG_ACTIVITY...');
-              const res = await storageService.syncFromGoogleMaster();
-              setFeedback(res.message);
-              setTimeout(() => setFeedback(null), 4000);
+            onClick={() => {
               onRefresh();
+              setFeedback('Data log aktivitas berhasil diperbarui.');
+              setTimeout(() => setFeedback(null), 3000);
             }}
-            className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Sinkron Google Sheets</span>
+            <span>Muat Ulang Log</span>
           </button>
           <button
             type="button"

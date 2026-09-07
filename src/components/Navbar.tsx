@@ -91,11 +91,6 @@ export const Navbar: React.FC<NavbarProps> = ({
       icon: <FileSpreadsheet className="w-4 h-4" />,
     },
     {
-      id: 'googlesheets',
-      label: 'Google Sheets',
-      icon: <FileText className="w-4 h-4 text-emerald-600" />,
-    },
-    {
       id: 'settings',
       label: 'Pengaturan',
       icon: <SettingsIcon className="w-4 h-4" />,
@@ -107,9 +102,9 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Top Subtle Status Bar */}
       <div className="bg-slate-50 border-b border-slate-100 text-xs px-4 sm:px-8 py-1.5 flex flex-wrap items-center justify-between gap-2 text-slate-500">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 font-medium text-emerald-600">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-            <span>Google Sheets Connected</span>
+          <div className="flex items-center gap-2 font-medium text-emerald-700">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+            <span>Sistem Aktif & Terhubung</span>
           </div>
           <span className="hidden md:inline text-slate-300">•</span>
           <span className="hidden md:inline text-slate-500 font-medium">
@@ -152,7 +147,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   E-Presensi Santri
                 </span>
                 <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-200">
-                  Sheets
+                  Online
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 font-semibold truncate max-w-[180px] sm:max-w-[260px]">

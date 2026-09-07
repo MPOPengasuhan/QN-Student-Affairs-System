@@ -131,10 +131,6 @@ export const Header: React.FC<HeaderProps> = ({
       title: 'Rekapitulasi Kehadiran',
       subtitle: 'Matriks kehadiran bulanan, filter rombel, dan cetak laporan resmi',
     },
-    googlesheets: {
-      title: 'Integrasi Google Sheets Database',
-      subtitle: 'Sinkronisasi 2 arah data santri, guru, kamar, & presensi ke Google Spreadsheet resmi',
-    },
     publish_center: {
       title: 'Publish Center (Landing Page & Info)',
       subtitle: 'Sesuaikan logo, judul, deskripsi, dan 3 kartu informasi interaktif landing page',

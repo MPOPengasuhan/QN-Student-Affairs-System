@@ -189,12 +189,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: <Home className="w-4 h-4 shrink-0 text-amber-400" />,
           allowedRoles: ['ADMIN', 'PEMBINA', 'OPERATOR'],
         },
-        {
-          id: 'googlesheets',
-          label: 'Database Google Sheets',
-          icon: <FileText className="w-4 h-4 shrink-0 text-emerald-400" />,
-          allowedRoles: ['ADMIN'],
-        },
       ],
     },
     {

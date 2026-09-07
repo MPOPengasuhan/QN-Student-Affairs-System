@@ -51,7 +51,7 @@ export const PublishCenterView: React.FC<PublishCenterViewProps> = ({
       tag: '03',
       title: 'INFO',
       content:
-        'Semua rekapitulasi data penempatan asrama dan log presensi harian disinkronkan langsung dengan Google Spreadsheet resmi.',
+        'Semua rekapitulasi data penempatan asrama dan log presensi harian tercatat rapi, aman, dan terintegrasi di sistem.',
       isActive: true,
     },
   ];

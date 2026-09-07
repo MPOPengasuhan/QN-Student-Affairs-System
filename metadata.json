@@ -1,6 +1,6 @@
 {
   "name": "QN Student Affairs System",
-  "description": "Sistem presensi kehadiran santri QR code terhubung langsung Google Sheets, manajemen data dewan asatidz/guru, kamar asrama, dan rekapitulasi kehadiran.",
+  "description": "Sistem Pusat Data Pengasuhan & Presensi Santri Pondok Pesantren Qotrun Nada, manajemen dewan asatidz/guru, kamar asrama, monitoring kehadiran, dan audit log.",
   "requestFramePermissions": [
     "camera"
   ],

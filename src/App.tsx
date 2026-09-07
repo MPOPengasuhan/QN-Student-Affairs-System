@@ -28,7 +28,6 @@ import { RekapView } from './components/RekapView';
 import { StudentManagementView } from './components/StudentManagementView';
 import { TeacherManagementView } from './components/TeacherManagementView';
 import { RoomManagementView } from './components/RoomManagementView';
-import { GoogleSheetsIntegrationView } from './components/GoogleSheetsIntegrationView';
 import { PublishCenterView } from './components/PublishCenterView';
 import { UserManagementView } from './components/UserManagementView';
 import { ActivityLogsView } from './components/ActivityLogsView';
@@ -618,17 +617,6 @@ export default function App() {
               students={students}
               records={records}
               settings={settings}
-            />
-          )}
-
-          {activeTab === 'googlesheets' && (
-            <GoogleSheetsIntegrationView
-              students={students}
-              teachers={teachers}
-              rooms={rooms}
-              records={records}
-              settings={settings}
-              onRefresh={refreshAllData}
             />
           )}
 
