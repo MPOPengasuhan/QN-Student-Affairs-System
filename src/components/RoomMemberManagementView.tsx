@@ -69,6 +69,9 @@ export const RoomMemberManagementView: React.FC<RoomMemberManagementViewProps> =
   const [movingStudent, setMovingStudent] = useState<Student | null>(null);
   const [targetRoomNumber, setTargetRoomNumber] = useState<string>('');
 
+  // Remove Member Modal State
+  const [studentToRemove, setStudentToRemove] = useState<Student | null>(null);
+
   // Notification Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -143,11 +146,16 @@ export const RoomMemberManagementView: React.FC<RoomMemberManagementViewProps> =
 
   // Remove student from room
   const handleRemoveMember = (student: Student) => {
-    if (confirm(`Keluarkan ${student.name} dari ${currentRoomNumber}?`)) {
-      storageService.removeStudentFromRoom(student.id, currentUser?.name);
-      onRefresh();
-      showToast(`${student.name} berhasil dikeluarkan dari kamar.`);
-    }
+    setStudentToRemove(student);
+  };
+
+  const handleConfirmRemoveMember = () => {
+    if (!studentToRemove) return;
+    const studentName = studentToRemove.name;
+    storageService.removeStudentFromRoom(studentToRemove.id, currentUser?.name);
+    setStudentToRemove(null);
+    onRefresh();
+    showToast(`${studentName} berhasil dikeluarkan dari kamar.`);
   };
 
   // Bulk add selected students
@@ -691,6 +699,41 @@ export const RoomMemberManagementView: React.FC<RoomMemberManagementViewProps> =
                 className="px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
               >
                 Konfirmasi Pindah
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Member Confirmation Modal */}
+      {studentToRemove && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-slate-900">
+                Keluarkan Santri?
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Apakah Anda yakin ingin mengeluarkan <strong>&quot;{studentToRemove.name}&quot;</strong> dari kamar <strong>{currentRoomNumber}</strong>? Status santri akan berubah menjadi belum berkamar.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setStudentToRemove(null)}
+                className="flex-1 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRemoveMember}
+                className="flex-1 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              >
+                Keluarkan
               </button>
             </div>
           </div>

@@ -20,6 +20,7 @@ import {
   Building,
   Radio,
   Maximize,
+  ShieldAlert,
 } from 'lucide-react';
 import { AccountSettingsModal } from './AccountSettingsModal';
 import { QOTRUN_NADA_LOGO_SVG } from '../data/mockData';
@@ -59,6 +60,7 @@ export const WelcomePortalView: React.FC<WelcomePortalViewProps> = ({
 }) => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showAccessDeniedModal, setShowAccessDeniedModal] = useState(false);
+  const [noticeModal, setNoticeModal] = useState<{ title: string; message: string } | null>(null);
 
   const teacherCode = user.teacherCode || user.username;
   const isMale = user.gender === 'L';
@@ -82,21 +84,24 @@ export const WelcomePortalView: React.FC<WelcomePortalViewProps> = ({
   const handleRoomMembersClick = () => {
     if (!isWaliKamar) {
       if (isAdmin) {
-        alert(
-          'Fitur "Atur Anggota Kamar" untuk Admin dikelola secara khusus melalui Halaman Admin (Sidebar > Atur Anggota Kamar). Kartu di portal ini khusus untuk Wali Kamar yang terdaftar pada kamar masing-masing.'
-        );
+        setNoticeModal({
+          title: 'Fitur Khusus Wali Kamar',
+          message: 'Fitur "Atur Anggota Kamar" untuk Admin dikelola secara khusus melalui Halaman Admin (Sidebar > Atur Anggota Kamar). Tombol di portal ini khusus untuk Wali Kamar yang terdaftar pada kamar masing-masing.',
+        });
       } else {
-        alert(
-          'Akses Ditolak: Fitur "Atur Anggota Kamar" tidak bisa diakses oleh siapapun KECUALI Wali Kamar yang sudah terdata sebagai wali kamar tersebut.'
-        );
+        setNoticeModal({
+          title: 'Akses Dibatasi',
+          message: 'Fitur "Atur Anggota Kamar" hanya dapat diakses oleh Wali Kamar / Musyrif yang telah ditugaskan pada kamar tertentu.',
+        });
       }
       return;
     }
 
     if (!hasAssignedRoom) {
-      alert(
-        'Akun Anda belum terhubung ke kamar asrama. Silakan isi dan kirim "Form Pendataan Kamar" terlebih dahulu agar akun Anda terhubung ke kamar yang Anda ampu.'
-      );
+      setNoticeModal({
+        title: 'Kamar Belum Terhubung',
+        message: 'Akun Anda belum terhubung ke kamar asrama. Silakan isi dan kirim "Form Pendataan Kamar" terlebih dahulu agar akun Anda terhubung ke kamar yang Anda ampu.',
+      });
       return;
     }
 
@@ -105,16 +110,18 @@ export const WelcomePortalView: React.FC<WelcomePortalViewProps> = ({
 
   const handleScannerClick = () => {
     if (!isAdmin && !isWaliKamar) {
-      alert(
-        'Akses Ditolak: HANYA WALI KAMAR DAN ADMIN YANG BISA MELAKUKAN SCAN PRESENSI QR.'
-      );
+      setNoticeModal({
+        title: 'Akses Ditolak',
+        message: 'Hanya Wali Kamar dan Admin yang dapat melakukan Scan Presensi QR asrama santri.',
+      });
       return;
     }
 
     if (isWaliKamar && !hasAssignedRoom) {
-      alert(
-        'Presensi QR Ditolak: Akun Wali Kamar Anda belum terhubung ke kamar asrama. Silakan lengkapi Form Pendataan Kamar terlebih dahulu.'
-      );
+      setNoticeModal({
+        title: 'Kamar Belum Terhubung',
+        message: 'Akun Wali Kamar Anda belum terhubung ke kamar asrama. Silakan lengkapi Form Pendataan Kamar terlebih dahulu.',
+      });
       return;
     }
 
@@ -561,6 +568,34 @@ export const WelcomePortalView: React.FC<WelcomePortalViewProps> = ({
                 className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold cursor-pointer"
               >
                 Mengerti
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Informational Notice Modal */}
+      {noticeModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-slate-200 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-base font-bold text-slate-900">
+                {noticeModal.title}
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                {noticeModal.message}
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setNoticeModal(null)}
+                className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold cursor-pointer"
+              >
+                Tutup
               </button>
             </div>
           </div>

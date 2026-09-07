@@ -37,6 +37,7 @@ export const StudentManagementView: React.FC<StudentManagementViewProps> = ({
   const [isBatchPrinting, setIsBatchPrinting] = useState<boolean>(false);
   const [isExcelModalOpen, setIsExcelModalOpen] = useState<boolean>(false);
   const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState<boolean>(false);
+  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -101,11 +102,16 @@ export const StudentManagementView: React.FC<StudentManagementViewProps> = ({
   };
 
   const handleDeleteStudent = (student: Student) => {
-    if (confirm(`Yakin ingin menghapus data santri ${student.name} (${student.nis})?`)) {
-      storageService.deleteStudent(student.id);
-      onRefresh();
-      showToast(`Data ${student.name} berhasil dihapus.`);
-    }
+    setStudentToDelete(student);
+  };
+
+  const handleConfirmDeleteStudent = () => {
+    if (!studentToDelete) return;
+    const name = studentToDelete.name;
+    storageService.deleteStudent(studentToDelete.id);
+    setStudentToDelete(null);
+    onRefresh();
+    showToast(`Data santri ${name} berhasil dihapus.`);
   };
 
   const handleDeleteAllStudents = () => {
@@ -113,12 +119,6 @@ export const StudentManagementView: React.FC<StudentManagementViewProps> = ({
     setIsDeleteAllConfirmOpen(false);
     onRefresh();
     showToast('Semua data santri berhasil dihapus dari database.');
-  };
-
-  const handleLoadSampleSantri = () => {
-    storageService.loadSampleSantri();
-    onRefresh();
-    showToast('Contoh data santri Pondok Pesantren Qotrun Nada berhasil dimuat.');
   };
 
   const handleImportSuccess = (imported: Student[], replaceAll: boolean) => {
@@ -350,14 +350,6 @@ export const StudentManagementView: React.FC<StudentManagementViewProps> = ({
                 <UserPlus className="w-4 h-4" />
                 <span>Tambah Manual</span>
               </button>
-
-              <button
-                onClick={handleLoadSampleSantri}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition-colors cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4 text-emerald-600" />
-                <span>Muat Contoh Santri Demo</span>
-              </button>
             </div>
           </div>
         ) : (
@@ -578,6 +570,43 @@ export const StudentManagementView: React.FC<StudentManagementViewProps> = ({
                 className="flex-1 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-colors cursor-pointer"
               >
                 Ya, Hapus Semua
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Single Student Confirmation Modal */}
+      {studentToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-slate-200 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900">
+                Hapus Data Santri?
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Yakin ingin menghapus data santri <strong>&quot;{studentToDelete.name}&quot;</strong> (NIP/NIS: {studentToDelete.nis})? Tindakan ini tidak dapat dibatalkan.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setStudentToDelete(null)}
+                className="flex-1 px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteStudent}
+                className="flex-1 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-colors cursor-pointer"
+              >
+                Ya, Hapus Santri
               </button>
             </div>
           </div>

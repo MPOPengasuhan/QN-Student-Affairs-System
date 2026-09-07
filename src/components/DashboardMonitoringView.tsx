@@ -85,6 +85,8 @@ export const DashboardMonitoringView: React.FC<DashboardMonitoringViewProps> = (
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState<boolean>(false);
+  const [resetNotification, setResetNotification] = useState<string | null>(null);
 
   // Live digital clock ticker
   useEffect(() => {
@@ -239,15 +241,14 @@ export const DashboardMonitoringView: React.FC<DashboardMonitoringViewProps> = (
 
   // Handler for Resetting All Room Allocations
   const handleResetRoomAllocations = () => {
-    if (
-      confirm(
-        'PERINGATAN: Apakah Anda yakin ingin MENGOSONGKAN SELURUH KAMAR SANTRI?\n\nSemua santri akan berstatus "Belum Ada Kamar" (room: -). Ini akan mereset alokasi kamar agar data pendataan dimulai dari awal sesuai kenyataan.'
-      )
-    ) {
-      storageService.resetRoomAllocations(currentUser?.name || 'Admin');
-      onRefresh();
-      alert('Berhasil! Seluruh alokasi kamar santri telah dikosongkan. Santri kini berstatus belum berkamar.');
-    }
+    setIsResetConfirmOpen(true);
+  };
+
+  const handleConfirmResetRooms = () => {
+    storageService.resetRoomAllocations(currentUser?.name || 'Admin');
+    setIsResetConfirmOpen(false);
+    onRefresh();
+    setResetNotification('Berhasil! Seluruh alokasi kamar santri telah dikosongkan. Santri kini berstatus belum berkamar.');
   };
 
   // 4. SDM Teachers & Supervisors
@@ -1220,6 +1221,63 @@ export const DashboardMonitoringView: React.FC<DashboardMonitoringViewProps> = (
           )}
         </div>
       </footer>
+
+      {/* Reset Confirmation Modal */}
+      {isResetConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl border border-rose-100 animate-in fade-in zoom-in duration-150 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Kosongkan Seluruh Kamar Santri?</h3>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                Semua santri akan berstatus <strong>&quot;Belum Ada Kamar&quot;</strong>. Ini akan mereset alokasi kamar agar data pendataan dimulai dari awal sesuai kenyataan santri di pondok.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsResetConfirmOpen(false)}
+                className="flex-1 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmResetRooms}
+                className="flex-1 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition cursor-pointer"
+              >
+                Ya, Reset Kamar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Success Notice */}
+      {resetNotification && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl border border-emerald-100 text-center animate-in zoom-in-95">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-slate-900">Reset Berhasil</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                {resetNotification}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setResetNotification(null)}
+              className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

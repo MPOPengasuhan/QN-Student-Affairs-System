@@ -507,8 +507,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <label className="block font-bold text-slate-700 mb-1">Nama Pimpinan / Pengasuh Pondok</label>
                     <input
                       type="text"
-                      value={formData.principalName}
-                      onChange={(e) => setFormData({ ...formData, principalName: e.target.value })}
+                      value={formData.headmasterName || ''}
+                      onChange={(e) => setFormData({ ...formData, headmasterName: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -517,8 +517,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <label className="block font-bold text-slate-700 mb-1">NIP / ID Pimpinan Pondok</label>
                     <input
                       type="text"
-                      value={formData.principalNip}
-                      onChange={(e) => setFormData({ ...formData, principalNip: e.target.value })}
+                      value={formData.headmasterNip || ''}
+                      onChange={(e) => setFormData({ ...formData, headmasterNip: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -527,7 +527,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <label className="block font-bold text-slate-700 mb-1">Operator / Biro Pengasuhan</label>
                     <input
                       type="text"
-                      value={formData.operatorName}
+                      value={formData.operatorName || ''}
                       onChange={(e) => setFormData({ ...formData, operatorName: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -537,7 +537,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <label className="block font-bold text-slate-700 mb-1">Tahun Ajaran Aktif</label>
                     <input
                       type="text"
-                      value={formData.academicYear}
+                      value={formData.academicYear || ''}
                       onChange={(e) => setFormData({ ...formData, academicYear: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -546,7 +546,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Semester</label>
                     <select
-                      value={formData.semester}
+                      value={formData.semester || 'Ganjil'}
                       onChange={(e) => setFormData({ ...formData, semester: e.target.value as 'Ganjil' | 'Genap' })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
@@ -555,11 +555,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     </select>
                   </div>
 
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Telepon / WhatsApp Kantor</label>
+                    <input
+                      type="text"
+                      value={formData.schoolPhone || ''}
+                      onChange={(e) => setFormData({ ...formData, schoolPhone: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="(021) 7788-9900"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">Email Resmi Pesantren</label>
+                    <input
+                      type="email"
+                      value={formData.schoolEmail || ''}
+                      onChange={(e) => setFormData({ ...formData, schoolEmail: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="sekretariat@qotrunnada.sch.id"
+                    />
+                  </div>
+
                   <div className="sm:col-span-2">
                     <label className="block font-bold text-slate-700 mb-1">Alamat Lengkap Pesantren</label>
                     <input
                       type="text"
-                      value={formData.schoolAddress}
+                      value={formData.schoolAddress || ''}
                       onChange={(e) => setFormData({ ...formData, schoolAddress: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />

@@ -38,6 +38,7 @@ export const RoomManagementView: React.FC<RoomManagementViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isExcelModalOpen, setIsExcelModalOpen] = useState<boolean>(false);
   const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState<boolean>(false);
+  const [roomToDelete, setRoomToDelete] = useState<{ id: string; name: string } | null>(null);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -109,11 +110,16 @@ export const RoomManagementView: React.FC<RoomManagementViewProps> = ({
   };
 
   const handleDelete = (id: string, roomName: string) => {
-    if (window.confirm(`Apakah Anda yakin ingin menghapus data kamar "${roomName}"?`)) {
-      storageService.deleteRoom(id);
-      onRefresh();
-      showToast(`Data kamar "${roomName}" berhasil dihapus.`);
-    }
+    setRoomToDelete({ id, name: roomName });
+  };
+
+  const handleConfirmDeleteSingle = () => {
+    if (!roomToDelete) return;
+    const { id, name: roomName } = roomToDelete;
+    storageService.deleteRoom(id);
+    setRoomToDelete(null);
+    onRefresh();
+    showToast(`Data kamar "${roomName}" berhasil dihapus.`);
   };
 
   const handleDeleteAll = () => {
@@ -604,6 +610,39 @@ export const RoomManagementView: React.FC<RoomManagementViewProps> = ({
                 className="flex-1 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition"
               >
                 Ya, Hapus Semua
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal: Delete Single Room */}
+      {roomToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl border border-rose-100 animate-in fade-in zoom-in duration-150 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Hapus Data Kamar?</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Apakah Anda yakin ingin menghapus data kamar <strong>&quot;{roomToDelete.name}&quot;</strong>? Tindakan ini tidak dapat dibatalkan.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setRoomToDelete(null)}
+                className="flex-1 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteSingle}
+                className="flex-1 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition cursor-pointer"
+              >
+                Hapus Kamar
               </button>
             </div>
           </div>

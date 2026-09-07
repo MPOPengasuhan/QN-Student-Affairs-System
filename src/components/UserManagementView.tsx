@@ -39,6 +39,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   // Add / Edit Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
+  const [userToDelete, setUserToDelete] = useState<UserAccount | null>(null);
 
   const [formUsername, setFormUsername] = useState('');
   const [formName, setFormName] = useState('');
@@ -128,21 +129,25 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
 
   const handleDeleteUser = (user: UserAccount) => {
     if (user.id === currentUser.id) {
-      alert('Anda tidak dapat menghapus akun Anda sendiri saat sedang login.');
+      setFeedback({ type: 'error', message: 'Anda tidak dapat menghapus akun Anda sendiri yang sedang aktif digunakan.' });
       return;
     }
+    setUserToDelete(user);
+  };
 
-    if (confirm(`Apakah Anda yakin ingin menghapus akun user "${user.name}" (${user.username})?`)) {
-      storageService.deleteUser(user.id);
-      storageService.addActivityLog(
-        'user',
-        'Hapus Akun User',
-        `Akun user ${user.name} (${user.username}) telah dihapus dari sistem.`,
-        currentUser.name
-      );
-      setFeedback({ type: 'success', message: `Akun ${user.name} berhasil dihapus.` });
-      onRefresh();
-    }
+  const handleConfirmDeleteUser = () => {
+    if (!userToDelete) return;
+    const user = userToDelete;
+    storageService.deleteUser(user.id);
+    storageService.addActivityLog(
+      'user',
+      'Hapus Akun User',
+      `Akun user ${user.name} (${user.username}) telah dihapus dari sistem.`,
+      currentUser.name
+    );
+    setUserToDelete(null);
+    setFeedback({ type: 'success', message: `Akun ${user.name} (${user.username}) berhasil dihapus.` });
+    onRefresh();
   };
 
   // Sync / Auto Generate accounts from Teacher list
@@ -483,6 +488,41 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-slate-200 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-base font-bold text-slate-900">
+                Hapus Akun Pengguna?
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Apakah Anda yakin ingin menghapus akun user <strong>&quot;{userToDelete.name}&quot;</strong> ({userToDelete.username})? Tindakan ini tidak dapat dibatalkan.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteUser}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
+              >
+                Hapus Akun
+              </button>
+            </div>
           </div>
         </div>
       )}

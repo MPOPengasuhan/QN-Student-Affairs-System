@@ -39,6 +39,7 @@ export const TeacherManagementView: React.FC<TeacherManagementViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isExcelModalOpen, setIsExcelModalOpen] = useState<boolean>(false);
   const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState<boolean>(false);
+  const [teacherToDelete, setTeacherToDelete] = useState<{ id: string; name: string } | null>(null);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
   const [selectedTeacherForCard, setSelectedTeacherForCard] = useState<Teacher | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -111,11 +112,16 @@ export const TeacherManagementView: React.FC<TeacherManagementViewProps> = ({
   };
 
   const handleDelete = (id: string, teacherName: string) => {
-    if (window.confirm(`Apakah Anda yakin ingin menghapus data "${teacherName}"?`)) {
-      storageService.deleteTeacher(id);
-      onRefresh();
-      showToast(`Data "${teacherName}" berhasil dihapus.`);
-    }
+    setTeacherToDelete({ id, name: teacherName });
+  };
+
+  const handleConfirmDeleteSingle = () => {
+    if (!teacherToDelete) return;
+    const { id, name: teacherName } = teacherToDelete;
+    storageService.deleteTeacher(id);
+    setTeacherToDelete(null);
+    onRefresh();
+    showToast(`Data "${teacherName}" berhasil dihapus.`);
   };
 
   const handleDeleteAll = () => {
@@ -604,6 +610,39 @@ export const TeacherManagementView: React.FC<TeacherManagementViewProps> = ({
                 className="flex-1 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition"
               >
                 Ya, Hapus Semua
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal: Delete Single Teacher */}
+      {teacherToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl border border-rose-100 animate-in fade-in zoom-in duration-150 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Hapus Data Guru / Asatidz?</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Apakah Anda yakin ingin menghapus data <strong>&quot;{teacherToDelete.name}&quot;</strong>? Tindakan ini tidak dapat dibatalkan.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setTeacherToDelete(null)}
+                className="flex-1 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteSingle}
+                className="flex-1 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition cursor-pointer"
+              >
+                Hapus Data
               </button>
             </div>
           </div>
