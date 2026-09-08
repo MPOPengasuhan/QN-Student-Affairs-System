@@ -611,16 +611,24 @@ class StorageService {
     return [...this.cachedActivityLogs];
   }
 
-  addActivityLog(type: ActivityLog['type'], action: string, description: string, performedBy?: string) {
+  addActivityLog(
+    type: ActivityLog['type'],
+    action: string,
+    description: string,
+    performedBy?: string,
+    category?: ActivityLog['category'],
+    metadata?: any
+  ) {
     const newLog: ActivityLog = {
       id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       type,
-      category: type,
+      category: category || type,
       action,
       title: action,
       description,
       performedBy: performedBy || this.cachedCurrentUser?.name || 'Sistem',
       timestamp: new Date().toISOString(),
+      metadata,
     };
 
     this.cachedActivityLogs.unshift(newLog);
@@ -1548,6 +1556,14 @@ class StorageService {
     return {
       date: targetDate,
       totalStudents,
+      presentCount: hadir,
+      lateCount: terlambat,
+      sickCount: sakit,
+      leaveCount: izin,
+      absentCount: alpa + belumAbsen,
+      totalAttended: totalHadir,
+      attendanceRate: attendancePercentage,
+      // Compatibility aliases:
       hadir,
       terlambat,
       sakit,
@@ -1593,6 +1609,14 @@ class StorageService {
 
       return {
         className,
+        totalStudents: item.total,
+        presentCount: item.hadir,
+        lateCount: item.terlambat,
+        sickCount: item.sakit,
+        leaveCount: item.izin,
+        absentCount: item.alpa + belumAbsen,
+        attendanceRate: percentage,
+        // Compatibility aliases:
         total: item.total,
         hadir: item.hadir,
         terlambat: item.terlambat,
@@ -1663,10 +1687,18 @@ class StorageService {
 
       return {
         roomName,
-        total: r.total,
-        capacity: r.capacity,
+        totalStudents: r.total,
+        presentCount: r.hadir,
+        lateCount: r.terlambat,
+        sickCount: r.sakit,
+        leaveCount: r.izin,
+        absentCount: r.alpa + belumAbsen,
+        attendanceRate: percentage,
         building: r.building,
         supervisorName: r.supervisor,
+        // Compatibility aliases:
+        total: r.total,
+        capacity: r.capacity,
         hadir: r.hadir,
         terlambat: r.terlambat,
         sakit: r.sakit,

@@ -166,7 +166,7 @@ export interface RoomAssignmentSubmission {
 export interface ActivityLog {
   id: string;
   type: 'presensi' | 'kamar' | 'pendataan_kamar' | 'laporan_kamar' | 'user' | 'approval' | 'system' | 'santri' | 'guru' | 'google_sheets';
-  category?: 'presensi' | 'pendataan_kamar' | 'laporan_kamar' | 'user' | 'system' | 'santri' | 'guru' | 'kamar' | 'google_sheets';
+  category?: 'presensi' | 'pendataan_kamar' | 'laporan_kamar' | 'user' | 'system' | 'santri' | 'guru' | 'kamar' | 'google_sheets' | 'approval';
   title?: string;
   action: string;
   description: string;
@@ -185,6 +185,13 @@ export interface DailySummary {
   absentCount: number; // alpa / belum hadir
   totalAttended: number; // hadir + terlambat
   attendanceRate: number; // %
+  hadir?: number;
+  terlambat?: number;
+  sakit?: number;
+  izin?: number;
+  alpa?: number;
+  belumAbsen?: number;
+  attendancePercentage?: number;
 }
 
 export interface ClassSummary {
@@ -196,6 +203,14 @@ export interface ClassSummary {
   leaveCount: number;
   absentCount: number;
   attendanceRate: number;
+  total?: number;
+  hadir?: number;
+  terlambat?: number;
+  sakit?: number;
+  izin?: number;
+  alpa?: number;
+  belumAbsen?: number;
+  percentage?: number;
 }
 
 export interface RoomSummary {
@@ -211,6 +226,15 @@ export interface RoomSummary {
   leaveCount: number;
   absentCount: number;
   attendanceRate: number;
+  total?: number;
+  capacity?: number;
+  hadir?: number;
+  terlambat?: number;
+  sakit?: number;
+  izin?: number;
+  alpa?: number;
+  belumAbsen?: number;
+  percentage?: number;
 }
 
 export interface ScanResult {
