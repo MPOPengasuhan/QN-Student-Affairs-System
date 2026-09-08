@@ -1,5 +1,16 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { UserAccount, Student, Room, AttendanceRecord, UserRole } from '../types';
+import {
+  UserAccount,
+  Student,
+  Room,
+  Teacher,
+  AttendanceRecord,
+  UserRole,
+  SupabaseUserRow,
+  SupabaseMasterGuruRow,
+  SupabaseMasterKamarRow,
+  SupabaseMasterSantriRow,
+} from '../types';
 
 const supabaseUrl = ((import.meta as any).env?.VITE_SUPABASE_URL || '').trim();
 const supabaseAnonKey = ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '').trim();
@@ -21,127 +32,227 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
   : null;
 
 // ============================================================================
-// DATA MAPPERS (Supports both standard snake_case and camelCase columns)
+// HELPER: USER ROLE PARSER
+// ============================================================================
+
+export function parseUserRole(rawRole: any): UserRole {
+  if (!rawRole) return 'GURU';
+  const clean = String(rawRole).trim().toUpperCase();
+  if (clean.includes('ADMIN') || clean.includes('PENGASUHAN')) return 'ADMIN';
+  if (clean.includes('MUSYRIF') || clean.includes('WALI_KAMAR') || clean.includes('WALI KAMAR')) return 'WALI_KAMAR';
+  if (clean.includes('WALI_KELAS') || clean.includes('WALI KELAS')) return 'WALI_KELAS';
+  if (clean.includes('PEMBINA')) return 'PEMBINA';
+  if (clean.includes('PIMPINAN')) return 'PIMPINAN';
+  if (clean.includes('PIKET')) return 'PIKET';
+  if (clean.includes('OPERATOR')) return 'OPERATOR';
+  return 'GURU';
+}
+
+function determineTeacherRole(jabatan?: string): Teacher['role'] {
+  if (!jabatan) return 'Guru';
+  const j = jabatan.toLowerCase();
+  if (j.includes('pimpinan') || j.includes('mudir')) return 'Pimpinan';
+  if (j.includes('pengasuhan')) return 'Pengasuhan';
+  if (j.includes('wali kamar') || j.includes('musyrif')) return 'Wali Kamar';
+  if (j.includes('staf') || j.includes('staff')) return 'Staf';
+  if (j.includes('ustadzah')) return 'Ustadzah';
+  if (j.includes('ustadz')) return 'Ustadz';
+  return 'Guru';
+}
+
+// ============================================================================
+// 1. TABEL: users (no, username, nama_pengguna, role_akses, kamar_binaan, password)
 // ============================================================================
 
 export function mapFromSupabaseUser(row: any): UserAccount {
+  const username = String(row.username || '');
+  const role = parseUserRole(row.role_akses || row.role);
+  const name = String(row.nama_pengguna || row.name || row.nama || username);
+  const password = String(row.password || '12345');
+  const kamarBinaan = row.kamar_binaan || row.assigned_room_name || row.kamar || undefined;
+
   return {
-    id: String(row.id || `usr-${Date.now()}`),
-    username: String(row.username || ''),
-    name: String(row.name || row.nama || ''),
-    password: String(row.password || ''),
-    role: (String(row.role || 'GURU').toUpperCase()) as UserRole,
+    id: String(row.no ? `usr-${row.no}` : row.id || `usr-${username}`),
+    no: row.no !== undefined && row.no !== null ? row.no : undefined,
+    username,
+    name,
+    password,
+    role,
     gender: (row.gender || row.jenis_kelamin || 'L') === 'P' ? 'P' : 'L',
-    teacherCode: row.teacher_code || row.teacherCode || row.kode_guru || undefined,
-    nip: row.nip || undefined,
+    teacherCode: row.teacher_code || row.teacherCode || row.kode_guru || (username.startsWith('GR') ? username : undefined),
+    nip: row.nip || (username.startsWith('GR') ? username : undefined),
     phone: row.phone || row.no_hp || undefined,
-    position: row.position || row.jabatan || undefined,
-    positionDetail: row.position_detail || row.positionDetail || undefined,
-    assignedRoomName: row.assigned_room_name || row.assignedRoomName || row.kamar || undefined,
+    position: row.position || row.jabatan || (role === 'WALI_KAMAR' ? 'Wali Kamar' : role),
+    positionDetail: row.position_detail || row.positionDetail || kamarBinaan || undefined,
+    assignedRoomName: kamarBinaan,
     avatarUrl: row.avatar_url || row.avatarUrl || row.foto || undefined,
-    isActive: row.is_active !== undefined ? Boolean(row.is_active) : (row.isActive !== undefined ? Boolean(row.isActive) : true),
+    isActive: row.is_active !== undefined ? Boolean(row.is_active) : true,
     createdAt: row.created_at || row.createdAt || new Date().toISOString(),
     lastLogin: row.last_login || row.lastLogin || undefined,
   };
 }
 
-export function mapToSupabaseUser(u: UserAccount): Record<string, any> {
-  return {
-    id: u.id,
+export function mapToSupabaseUser(u: UserAccount): SupabaseUserRow {
+  const row: SupabaseUserRow = {
     username: u.username,
-    name: u.name,
+    nama_pengguna: u.name,
+    role_akses: u.role,
+    kamar_binaan: u.assignedRoomName || '',
     password: u.password,
-    role: u.role,
-    gender: u.gender,
-    teacher_code: u.teacherCode || null,
-    nip: u.nip || null,
-    phone: u.phone || null,
-    position: u.position || null,
-    position_detail: u.positionDetail || null,
-    assigned_room_name: u.assignedRoomName || null,
-    avatar_url: u.avatarUrl || null,
-    is_active: u.isActive,
-    created_at: u.createdAt,
-    last_login: u.lastLogin || null,
+  };
+  if (u.no !== undefined && u.no !== null && u.no !== '') {
+    row.no = u.no;
+  }
+  return row;
+}
+
+// ============================================================================
+// 2. TABEL: master_guru (no, kode, nama_guru, jk, status, jabatan, ket)
+// ============================================================================
+
+export function mapFromSupabaseGuru(row: any): Teacher {
+  const kode = String(row.kode || row.teacher_code || row.nip || '');
+  const namaGuru = String(row.nama_guru || row.name || row.nama || '');
+  const jk = (row.jk || row.gender || 'L') === 'P' ? 'P' : 'L';
+  const status = String(row.status || 'Aktif');
+  const jabatan = String(row.jabatan || row.position || 'Guru');
+  const ket = String(row.ket || row.position_detail || '');
+
+  return {
+    id: String(row.no ? `guru-${row.no}` : row.id || `guru-${kode}`),
+    no: row.no !== undefined && row.no !== null ? row.no : undefined,
+    teacherCode: kode,
+    nip: kode,
+    name: namaGuru,
+    gender: jk,
+    status,
+    position: jabatan,
+    positionDetail: ket,
+    subject: jabatan || 'Guru',
+    phone: row.phone || row.no_hp || '',
+    role: determineTeacherRole(jabatan),
+    avatarUrl: row.avatar_url || undefined,
+    qrCodeData: kode,
+    createdAt: row.created_at || new Date().toISOString(),
   };
 }
 
-export function mapFromSupabaseSantri(row: any): Student {
-  const nis = String(row.nis || row.nip_pondok || row.nipPondok || '');
-  return {
-    id: String(row.id || nis || `st-${Date.now()}`),
-    nis,
-    nisn: row.nisn ? String(row.nisn) : undefined,
-    name: String(row.name || row.nama || ''),
-    className: String(row.class_name || row.className || row.kelas || 'Umum'),
-    roomName: row.room_name || row.roomName || row.kamar || row.nama_kamar || '-',
-    gender: (row.gender || row.jenis_kelamin || 'L') === 'P' ? 'P' : 'L',
-    parentPhone: row.parent_phone || row.parentPhone || row.no_hp_ortu || undefined,
-    avatarUrl: row.avatar_url || row.avatarUrl || row.foto || undefined,
-    qrCodeData: String(row.qr_code_data || row.qrCodeData || row.qrcode || nis),
-    createdAt: row.created_at || row.createdAt || new Date().toISOString(),
-    nipPondok: row.nip_pondok || row.nipPondok || nis,
-    tempat: row.tempat || undefined,
-    idb: row.idb || undefined,
-    noKartu: row.no_kartu || row.noKartu || row.cazh_id || undefined,
-    idIzin: row.id_izin || row.idIzin || undefined,
+export function mapToSupabaseGuru(t: Teacher): SupabaseMasterGuruRow {
+  const row: SupabaseMasterGuruRow = {
+    kode: t.teacherCode || t.nip,
+    nama_guru: t.name,
+    jk: t.gender || 'L',
+    status: t.status || 'Aktif',
+    jabatan: t.position || 'Guru',
+    ket: t.positionDetail || '',
   };
+  if (t.no !== undefined && t.no !== null && t.no !== '') {
+    row.no = t.no;
+  }
+  return row;
 }
 
-export function mapToSupabaseSantri(s: Student): Record<string, any> {
-  return {
-    id: s.id,
-    nis: s.nis,
-    nisn: s.nisn || null,
-    name: s.name,
-    class_name: s.className,
-    room_name: s.roomName || '-',
-    gender: s.gender,
-    parent_phone: s.parentPhone || null,
-    avatar_url: s.avatarUrl || null,
-    qr_code_data: s.qrCodeData || s.nis,
-    created_at: s.createdAt,
-    nip_pondok: s.nipPondok || s.nis,
-    no_kartu: s.noKartu || null,
-  };
-}
+// ============================================================================
+// 3. TABEL: master_kamar (no, nama_kamar, lokasi, kode_kamar, jk)
+// ============================================================================
 
 export function mapFromSupabaseKamar(row: any): Room {
-  const roomNumber = String(row.room_number || row.roomNumber || row.nomor_kamar || row.nama_kamar || row.nama || '');
+  const namaKamar = String(row.nama_kamar || row.room_number || row.nama || '');
+  const kodeKamar = row.kode_kamar || row.room_code || undefined;
+  const lokasi = row.lokasi || row.location || undefined;
+  const jk = (row.jk || row.gender || 'L') === 'P' ? 'P' : 'L';
+  const building = lokasi ? `Komplek ${lokasi}` : String(row.building || 'Asrama');
+
   return {
-    id: String(row.id || `rm-${roomNumber}`),
-    roomNumber,
-    roomCode: row.room_code || row.roomCode || row.kode_kamar || undefined,
-    location: row.location || row.lokasi || undefined,
-    gender: (row.gender || row.jenis_kelamin || 'L') === 'P' ? 'P' : 'L',
-    building: String(row.building || row.gedung || row.komplek || 'Asrama'),
+    id: String(row.no ? `rm-${row.no}` : (kodeKamar ? `rm-${kodeKamar}` : `rm-${namaKamar}`)),
+    no: row.no !== undefined && row.no !== null ? row.no : undefined,
+    roomNumber: namaKamar,
+    roomCode: kodeKamar,
+    location: lokasi,
+    gender: jk,
+    building,
     capacity: Number(row.capacity || row.kapasitas || 20),
-    supervisorName: String(row.supervisor_name || row.supervisorName || row.wali_kamar || row.musyrif || 'Wali Kamar'),
-    supervisorCode: row.supervisor_code || row.supervisorCode || row.kode_wali || undefined,
-    supervisorPhone: row.supervisor_phone || row.supervisorPhone || row.no_hp_wali || undefined,
-    description: row.description || row.deskripsi || undefined,
-    isFilled: row.is_filled !== undefined ? Boolean(row.is_filled) : (row.isFilled !== undefined ? Boolean(row.isFilled) : false),
-    createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+    supervisorName: String(row.supervisor_name || row.wali_kamar || 'Wali Kamar'),
+    supervisorCode: row.supervisor_code || undefined,
+    supervisorPhone: row.supervisor_phone || undefined,
+    description: row.description || undefined,
+    isFilled: row.is_filled !== undefined ? Boolean(row.is_filled) : false,
+    createdAt: row.created_at || new Date().toISOString(),
   };
 }
 
-export function mapToSupabaseKamar(r: Room): Record<string, any> {
+export function mapToSupabaseKamar(r: Room): SupabaseMasterKamarRow {
+  const row: SupabaseMasterKamarRow = {
+    nama_kamar: r.roomNumber,
+    lokasi: r.location || (r.building ? r.building.replace('Komplek ', '').trim() : ''),
+    kode_kamar: r.roomCode || r.roomNumber,
+    jk: r.gender || 'L',
+  };
+  if (r.no !== undefined && r.no !== null && r.no !== '') {
+    row.no = r.no;
+  }
+  return row;
+}
+
+// ============================================================================
+// 4. TABEL: master_santri (no, nip_pondok, nama_santri, kelas, jk, lokasi, idb, no_kartu, qr_code, id_izin, kode_kamar)
+// ============================================================================
+
+export function mapFromSupabaseSantri(row: any): Student {
+  const nipPondok = String(row.nip_pondok || row.nis || row.nipPondok || '');
+  const namaSantri = String(row.nama_santri || row.name || row.nama || '');
+  const kelas = String(row.kelas || row.class_name || 'Umum');
+  const jk = (row.jk || row.gender || 'L') === 'P' ? 'P' : 'L';
+  const lokasi = row.lokasi || row.tempat || undefined;
+  const idb = row.idb !== null && row.idb !== undefined ? String(row.idb) : undefined;
+  const noKartu = row.no_kartu !== null && row.no_kartu !== undefined ? String(row.no_kartu) : undefined;
+  const qrCode = String(row.qr_code || row.qr_code_data || nipPondok);
+  const idIzin = row.id_izin !== null && row.id_izin !== undefined ? String(row.id_izin) : undefined;
+  const kodeKamar = row.kode_kamar || row.room_name || row.kamar || '-';
+
   return {
-    id: r.id,
-    room_number: r.roomNumber,
-    room_code: r.roomCode || null,
-    location: r.location || null,
-    gender: r.gender || 'L',
-    building: r.building,
-    capacity: r.capacity,
-    supervisor_name: r.supervisorName,
-    supervisor_code: r.supervisorCode || null,
-    supervisor_phone: r.supervisorPhone || null,
-    description: r.description || null,
-    is_filled: Boolean(r.isFilled),
-    created_at: r.createdAt,
+    id: String(row.no ? `st-${row.no}` : (nipPondok ? `st-${nipPondok}` : `st-${Date.now()}`)),
+    no: row.no !== undefined && row.no !== null ? row.no : undefined,
+    nis: nipPondok,
+    nipPondok,
+    nisn: row.nisn ? String(row.nisn) : undefined,
+    name: namaSantri,
+    className: kelas,
+    gender: jk,
+    tempat: lokasi,
+    idb,
+    noKartu,
+    qrCodeData: qrCode,
+    idIzin,
+    roomName: kodeKamar,
+    parentPhone: row.parent_phone || undefined,
+    avatarUrl: row.avatar_url || undefined,
+    createdAt: row.created_at || new Date().toISOString(),
   };
 }
+
+export function mapToSupabaseSantri(s: Student): SupabaseMasterSantriRow {
+  const row: SupabaseMasterSantriRow = {
+    nip_pondok: s.nipPondok || s.nis,
+    nama_santri: s.name,
+    kelas: s.className,
+    jk: s.gender || 'L',
+    lokasi: s.tempat || '',
+    idb: s.idb || null,
+    no_kartu: s.noKartu || null,
+    qr_code: s.qrCodeData || s.nipPondok || s.nis,
+    id_izin: s.idIzin || null,
+    kode_kamar: (s.roomName && s.roomName !== '-') ? s.roomName : null,
+  };
+  if (s.no !== undefined && s.no !== null && s.no !== '') {
+    row.no = s.no;
+  }
+  return row;
+}
+
+// ============================================================================
+// TABEL PRESENSI (Optional / Terkait Kehadiran)
+// ============================================================================
 
 export function mapFromSupabasePresensi(row: any): AttendanceRecord {
   return {

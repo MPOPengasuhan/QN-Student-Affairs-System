@@ -25,6 +25,8 @@ import {
   isSupabaseConfigured,
   mapFromSupabaseUser,
   mapToSupabaseUser,
+  mapFromSupabaseGuru,
+  mapToSupabaseGuru,
   mapFromSupabaseSantri,
   mapToSupabaseSantri,
   mapFromSupabaseKamar,
@@ -267,11 +269,14 @@ class StorageService {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
           this.fetchUsersFromSupabase().then(() => this.notify());
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'santri' }, () => {
-          this.fetchSantriFromSupabase().then(() => this.notify());
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'master_guru' }, () => {
+          this.fetchTeachersFromSupabase().then(() => this.notify());
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'kamar' }, () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'master_kamar' }, () => {
           this.fetchKamarFromSupabase().then(() => this.notify());
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'master_santri' }, () => {
+          this.fetchSantriFromSupabase().then(() => this.notify());
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'presensi' }, () => {
           this.fetchPresensiFromSupabase().then(() => this.notify());
@@ -307,16 +312,36 @@ class StorageService {
     return false;
   }
 
-  async fetchSantriFromSupabase(): Promise<boolean> {
+  async fetchTeachersFromSupabase(): Promise<boolean> {
     if (!supabase) return false;
     try {
-      const { data, error } = await supabase.from('santri').select('*').order('name', { ascending: true });
-      if (!error && Array.isArray(data)) {
-        this.cachedStudents = deduplicateStudentsList(data.map(mapFromSupabaseSantri));
+      let res = await supabase.from('master_guru').select('*').order('nama_guru', { ascending: true });
+      if (res.error) {
+        res = await supabase.from('guru').select('*').order('nama', { ascending: true });
+      }
+      if (!res.error && Array.isArray(res.data) && res.data.length > 0) {
+        this.cachedTeachers = deduplicateTeachersList(res.data.map(mapFromSupabaseGuru));
         return true;
       }
     } catch (e) {
-      console.warn('[Supabase] Error fetching santri:', e);
+      console.warn('[Supabase] Error fetching master_guru:', e);
+    }
+    return false;
+  }
+
+  async fetchSantriFromSupabase(): Promise<boolean> {
+    if (!supabase) return false;
+    try {
+      let res = await supabase.from('master_santri').select('*').order('nama_santri', { ascending: true });
+      if (res.error) {
+        res = await supabase.from('santri').select('*').order('name', { ascending: true });
+      }
+      if (!res.error && Array.isArray(res.data)) {
+        this.cachedStudents = deduplicateStudentsList(res.data.map(mapFromSupabaseSantri));
+        return true;
+      }
+    } catch (e) {
+      console.warn('[Supabase] Error fetching master_santri:', e);
     }
     return false;
   }
@@ -324,13 +349,16 @@ class StorageService {
   async fetchKamarFromSupabase(): Promise<boolean> {
     if (!supabase) return false;
     try {
-      const { data, error } = await supabase.from('kamar').select('*').order('room_number', { ascending: true });
-      if (!error && Array.isArray(data)) {
-        this.cachedRooms = deduplicateRoomsList(data.map(mapFromSupabaseKamar));
+      let res = await supabase.from('master_kamar').select('*').order('nama_kamar', { ascending: true });
+      if (res.error) {
+        res = await supabase.from('kamar').select('*').order('room_number', { ascending: true });
+      }
+      if (!res.error && Array.isArray(res.data)) {
+        this.cachedRooms = deduplicateRoomsList(res.data.map(mapFromSupabaseKamar));
         return true;
       }
     } catch (e) {
-      console.warn('[Supabase] Error fetching kamar:', e);
+      console.warn('[Supabase] Error fetching master_kamar:', e);
     }
     return false;
   }
@@ -356,6 +384,7 @@ class StorageService {
     try {
       await Promise.allSettled([
         this.fetchUsersFromSupabase(),
+        this.fetchTeachersFromSupabase(),
         this.fetchSantriFromSupabase(),
         this.fetchKamarFromSupabase(),
         this.fetchPresensiFromSupabase(),
@@ -412,7 +441,7 @@ class StorageService {
     const cleanPassword = (password || '').trim();
 
     if (!cleanInput) {
-      return { success: false, message: 'Silakan masukkan Username atau Kode Guru.' };
+      return { success: false, message: 'Silakan masukkan Username Anda.' };
     }
 
     if (!cleanPassword) {
@@ -426,16 +455,16 @@ class StorageService {
           .from('users')
           .select('*');
 
-        if (!error && Array.isArray(data) && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           const freshUsers = data.map(mapFromSupabaseUser);
-          this.cachedUsers = freshUsers;
+          if (freshUsers.length > 0) {
+            this.cachedUsers = freshUsers;
+          }
 
           const matchedUser = freshUsers.find((u) => {
             const uUsername = (u.username || '').trim().toLowerCase();
-            const uCode = (u.teacherCode || '').trim().toLowerCase();
-            const uNip = (u.nip || '').trim().toLowerCase();
             const target = cleanInput.toLowerCase();
-            return uUsername === target || uCode === target || uNip === target;
+            return uUsername === target;
           });
 
           if (matchedUser) {
@@ -443,27 +472,24 @@ class StorageService {
               return { success: false, message: 'Akun ini sedang dinonaktifkan oleh Administrator.' };
             }
 
-            // Validate password against user record in Supabase
+            // Validate password against user record in Supabase users table
             if (matchedUser.password !== cleanPassword && cleanPassword !== 'admin123' && cleanPassword !== '12345') {
               return { success: false, message: 'Password yang Anda masukkan salah.' };
             }
 
-            // Update lastLogin in Supabase
             const nowIso = new Date().toISOString();
             matchedUser.lastLogin = nowIso;
-            await supabase
-              .from('users')
-              .update({ last_login: nowIso })
-              .eq('id', matchedUser.id);
 
             this.setCurrentUser(matchedUser);
             this.addActivityLog(
               'user',
               'Login Akun Supabase',
-              `Pengguna ${matchedUser.name} (${matchedUser.username} - ${matchedUser.role}) berhasil login melalui Supabase.`,
+              `Pengguna ${matchedUser.name} (${matchedUser.username} - ${matchedUser.role}) berhasil login melalui tabel users Supabase.`,
               matchedUser.name
             );
             return { success: true, user: matchedUser, message: 'Login berhasil! Selamat datang.' };
+          } else {
+            return { success: false, message: `Username "${cleanInput}" tidak terdaftar di tabel users Supabase.` };
           }
         }
       } catch (err) {
@@ -474,46 +500,12 @@ class StorageService {
     // 2. In-memory / Cached fallback validation
     const user = this.cachedUsers.find((u) => {
       const uUsername = (u.username || '').trim().toLowerCase();
-      const uCode = (u.teacherCode || '').trim().toLowerCase();
-      const uNip = (u.nip || '').trim().toLowerCase();
       const target = cleanInput.toLowerCase();
-      return uUsername === target || uCode === target || uNip === target;
+      return uUsername === target;
     });
 
     if (!user) {
-      // Check teachers
-      const matchedTeacher = this.cachedTeachers.find(
-        (t) =>
-          (t.teacherCode && t.teacherCode.toLowerCase() === cleanInput.toLowerCase()) ||
-          (t.nip && t.nip.toLowerCase() === cleanInput.toLowerCase()) ||
-          t.name.toLowerCase().includes(cleanInput.toLowerCase())
-      );
-
-      if (matchedTeacher) {
-        if (cleanPassword === '12345' || cleanPassword === 'admin') {
-          const newUser: UserAccount = {
-            id: `usr-${matchedTeacher.id}`,
-            username: matchedTeacher.teacherCode || matchedTeacher.nip || `GR-${matchedTeacher.id.slice(-3)}`,
-            name: matchedTeacher.name,
-            password: '12345',
-            role: matchedTeacher.role === 'Pengasuhan' ? 'ADMIN' : (matchedTeacher.role === 'Wali Kamar' ? 'MUSYRIF' : 'GURU'),
-            gender: matchedTeacher.gender,
-            teacherCode: matchedTeacher.teacherCode,
-            nip: matchedTeacher.nip,
-            phone: matchedTeacher.phone,
-            isActive: true,
-            createdAt: new Date().toISOString(),
-            lastLogin: new Date().toISOString(),
-          };
-          this.saveUser(newUser);
-          this.setCurrentUser(newUser);
-          return { success: true, user: newUser, message: 'Login berhasil! Selamat datang.' };
-        } else {
-          return { success: false, message: 'Password salah. Gunakan password default: 12345' };
-        }
-      }
-
-      return { success: false, message: 'Username atau Kode Guru tidak ditemukan di database Supabase.' };
+      return { success: false, message: `Username "${cleanInput}" tidak ditemukan di data akun.` };
     }
 
     if (!user.isActive) {
@@ -540,7 +532,7 @@ class StorageService {
   }
 
   changeUserPassword(userId: string, oldPassword: string, newPassword: string): { success: boolean; message: string } {
-    const user = this.cachedUsers.find((u) => u.id === userId);
+    const user = this.cachedUsers.find((u) => u.id === userId || u.username === userId);
     if (!user) return { success: false, message: 'User tidak ditemukan.' };
 
     if (user.password !== oldPassword && oldPassword !== 'admin123' && oldPassword !== '12345') {
@@ -557,7 +549,7 @@ class StorageService {
   }
 
   // ============================================================================
-  // USERS MANAGEMENT
+  // USERS MANAGEMENT (Supabase table 'users')
   // ============================================================================
 
   getUsers(): UserAccount[] {
@@ -575,11 +567,17 @@ class StorageService {
     this.notify();
 
     if (supabase) {
+      const payload = mapToSupabaseUser(user);
       supabase
         .from('users')
-        .upsert(mapToSupabaseUser(user))
+        .upsert(payload, { onConflict: 'username' })
         .then(({ error }) => {
-          if (error) console.error('[Supabase] Error saving user:', error);
+          if (error) {
+            // Fallback retry upsert
+            supabase.from('users').upsert(payload).then(({ error: err2 }) => {
+              if (err2) console.error('[Supabase] Error saving user to users table:', err2);
+            });
+          }
         });
     }
 
@@ -587,6 +585,9 @@ class StorageService {
   }
 
   deleteUser(userId: string): boolean {
+    const userToDelete = this.cachedUsers.find((u) => u.id === userId || u.username === userId);
+    const username = userToDelete?.username || userId;
+
     this.cachedUsers = this.cachedUsers.filter((u) => u.id !== userId && u.username !== userId);
     this.notify();
 
@@ -594,9 +595,9 @@ class StorageService {
       supabase
         .from('users')
         .delete()
-        .or(`id.eq.${userId},username.eq.${userId}`)
+        .eq('username', username)
         .then(({ error }) => {
-          if (error) console.error('[Supabase] Error deleting user:', error);
+          if (error) console.error('[Supabase] Error deleting user from users table:', error);
         });
     }
 
@@ -657,7 +658,7 @@ class StorageService {
   }
 
   // ============================================================================
-  // PENDATAAN KAMAR (Supabase table 'kamar' & 'santri')
+  // PENDATAAN KAMAR (Supabase table 'master_kamar' & 'master_santri')
   // ============================================================================
 
   getRooms(): Room[] {
@@ -665,7 +666,7 @@ class StorageService {
   }
 
   saveRoom(room: Room): boolean {
-    const idx = this.cachedRooms.findIndex((r) => r.id === room.id || r.roomNumber === room.roomNumber);
+    const idx = this.cachedRooms.findIndex((r) => r.id === room.id || r.roomNumber === room.roomNumber || (room.roomCode && r.roomCode === room.roomCode));
     if (idx >= 0) {
       this.cachedRooms[idx] = { ...this.cachedRooms[idx], ...room };
     } else {
@@ -676,11 +677,17 @@ class StorageService {
     this.notify();
 
     if (supabase) {
+      const payload = mapToSupabaseKamar(room);
       supabase
-        .from('kamar')
-        .upsert(mapToSupabaseKamar(room))
+        .from('master_kamar')
+        .upsert(payload, { onConflict: 'nama_kamar' })
         .then(({ error }) => {
-          if (error) console.error('[Supabase] Error saving kamar:', error);
+          if (error) {
+            // Fallback retry
+            supabase.from('master_kamar').upsert(payload).then(({ error: err2 }) => {
+              if (err2) console.error('[Supabase] Error saving master_kamar:', err2);
+            });
+          }
         });
     }
 
@@ -692,7 +699,7 @@ class StorageService {
       this.cachedRooms = deduplicateRoomsList(newRooms);
     } else {
       newRooms.forEach((r) => {
-        const idx = this.cachedRooms.findIndex((item) => item.id === r.id || item.roomNumber === r.roomNumber);
+        const idx = this.cachedRooms.findIndex((item) => item.id === r.id || item.roomNumber === r.roomNumber || (r.roomCode && item.roomCode === r.roomCode));
         if (idx >= 0) {
           this.cachedRooms[idx] = { ...this.cachedRooms[idx], ...r };
         } else {
@@ -705,11 +712,16 @@ class StorageService {
     this.notify();
 
     if (supabase) {
+      const payloads = newRooms.map(mapToSupabaseKamar);
       supabase
-        .from('kamar')
-        .upsert(newRooms.map(mapToSupabaseKamar))
+        .from('master_kamar')
+        .upsert(payloads, { onConflict: 'nama_kamar' })
         .then(({ error }) => {
-          if (error) console.error('[Supabase] Error bulk saving kamar:', error);
+          if (error) {
+            supabase.from('master_kamar').upsert(payloads).then(({ error: err2 }) => {
+              if (err2) console.error('[Supabase] Error bulk saving master_kamar:', err2);
+            });
+          }
         });
     }
 
@@ -717,16 +729,16 @@ class StorageService {
   }
 
   deleteRoom(idOrNumber: string): boolean {
-    this.cachedRooms = this.cachedRooms.filter((r) => r.id !== idOrNumber && r.roomNumber !== idOrNumber);
+    this.cachedRooms = this.cachedRooms.filter((r) => r.id !== idOrNumber && r.roomNumber !== idOrNumber && r.roomCode !== idOrNumber);
     this.notify();
 
     if (supabase) {
       supabase
-        .from('kamar')
+        .from('master_kamar')
         .delete()
-        .or(`id.eq.${idOrNumber},room_number.eq.${idOrNumber}`)
+        .or(`nama_kamar.eq.${idOrNumber},kode_kamar.eq.${idOrNumber}`)
         .then(({ error }) => {
-          if (error) console.error('[Supabase] Error deleting kamar:', error);
+          if (error) console.error('[Supabase] Error deleting master_kamar:', error);
         });
     }
 
@@ -739,11 +751,11 @@ class StorageService {
 
     if (supabase) {
       supabase
-        .from('kamar')
+        .from('master_kamar')
         .delete()
-        .neq('id', '0')
+        .neq('nama_kamar', '___dummy___')
         .then(({ error }) => {
-          if (error) console.error('[Supabase] Error clearing kamar:', error);
+          if (error) console.error('[Supabase] Error clearing master_kamar:', error);
         });
     }
 
@@ -760,7 +772,7 @@ class StorageService {
   ) {
     let count = 0;
     this.cachedStudents = this.cachedStudents.map((s) => {
-      if (studentIds.includes(s.id) || studentIds.includes(s.nis)) {
+      if (studentIds.includes(s.id) || studentIds.includes(s.nis) || (s.nipPondok && studentIds.includes(s.nipPondok))) {
         count++;
         return { ...s, roomName };
       }
@@ -784,17 +796,11 @@ class StorageService {
     if (supabase) {
       for (const sid of studentIds) {
         supabase
-          .from('santri')
-          .update({ room_name: roomName })
-          .or(`id.eq.${sid},nis.eq.${sid}`)
+          .from('master_santri')
+          .update({ kode_kamar: roomName })
+          .or(`nip_pondok.eq.${sid},idb.eq.${sid}`)
           .then(() => {});
       }
-
-      supabase
-        .from('kamar')
-        .update({ is_filled: true })
-        .or(`room_number.eq.${roomName},room_code.eq.${roomName}`)
-        .then(() => {});
     }
 
     return {
@@ -827,19 +833,11 @@ class StorageService {
 
     if (supabase) {
       supabase
-        .from('santri')
-        .update({ room_name: '-' })
-        .neq('id', '0')
+        .from('master_santri')
+        .update({ kode_kamar: null })
+        .neq('nip_pondok', '___dummy___')
         .then(({ error }) => {
-          if (error) console.error('[Supabase] Error resetting santri room_name:', error);
-        });
-
-      supabase
-        .from('kamar')
-        .update({ is_filled: false })
-        .neq('id', '0')
-        .then(({ error }) => {
-          if (error) console.error('[Supabase] Error resetting kamar is_filled:', error);
+          if (error) console.error('[Supabase] Error resetting master_santri kode_kamar:', error);
         });
     }
 
@@ -847,7 +845,7 @@ class StorageService {
   }
 
   addStudentToRoom(studentId: string, roomName: string, performedBy?: string): boolean {
-    const student = this.cachedStudents.find((s) => s.id === studentId || s.nis === studentId);
+    const student = this.cachedStudents.find((s) => s.id === studentId || s.nis === studentId || s.nipPondok === studentId);
     if (!student) return false;
 
     student.roomName = roomName;
@@ -855,9 +853,9 @@ class StorageService {
 
     if (supabase) {
       supabase
-        .from('santri')
-        .update({ room_name: roomName })
-        .or(`id.eq.${studentId},nis.eq.${studentId}`)
+        .from('master_santri')
+        .update({ kode_kamar: roomName })
+        .or(`nip_pondok.eq.${studentId},idb.eq.${studentId}`)
         .then(() => {});
     }
 
@@ -866,7 +864,7 @@ class StorageService {
   }
 
   removeStudentFromRoom(studentId: string, performedBy?: string): boolean {
-    const student = this.cachedStudents.find((s) => s.id === studentId || s.nis === studentId);
+    const student = this.cachedStudents.find((s) => s.id === studentId || s.nis === studentId || s.nipPondok === studentId);
     if (!student) return false;
 
     const oldRoom = student.roomName;
@@ -875,9 +873,9 @@ class StorageService {
 
     if (supabase) {
       supabase
-        .from('santri')
-        .update({ room_name: '-' })
-        .or(`id.eq.${studentId},nis.eq.${studentId}`)
+        .from('master_santri')
+        .update({ kode_kamar: null })
+        .or(`nip_pondok.eq.${studentId},idb.eq.${studentId}`)
         .then(() => {});
     }
 
@@ -946,7 +944,7 @@ class StorageService {
     sub.approvedBy = approverName;
 
     this.cachedStudents = this.cachedStudents.map((st) => {
-      if (sub.studentIds.includes(st.id)) {
+      if (sub.studentIds.includes(st.id) || sub.studentIds.includes(st.nis) || (st.nipPondok && sub.studentIds.includes(st.nipPondok))) {
         return { ...st, roomName: sub.roomName };
       }
       return st;
@@ -961,9 +959,8 @@ class StorageService {
 
     if (supabase) {
       for (const sid of sub.studentIds) {
-        supabase.from('santri').update({ room_name: sub.roomName }).or(`id.eq.${sid},nis.eq.${sid}`).then(() => {});
+        supabase.from('master_santri').update({ kode_kamar: sub.roomName }).or(`nip_pondok.eq.${sid},idb.eq.${sid}`).then(() => {});
       }
-      supabase.from('kamar').update({ is_filled: true }).or(`room_number.eq.${sub.roomName}`).then(() => {});
     }
 
     return true;
@@ -983,7 +980,7 @@ class StorageService {
   }
 
   // ============================================================================
-  // PENDATAAN SANTRI (Supabase table 'santri')
+  // PENDATAAN SANTRI (Supabase table 'master_santri')
   // ============================================================================
 
   getStudents(): Student[] {
@@ -1016,7 +1013,7 @@ class StorageService {
   }
 
   saveStudent(student: Student): boolean {
-    const index = this.cachedStudents.findIndex((s) => s.id === student.id || s.nis === student.nis);
+    const index = this.cachedStudents.findIndex((s) => s.id === student.id || s.nis === student.nis || (student.nipPondok && s.nipPondok === student.nipPondok));
     if (index >= 0) {
       this.cachedStudents[index] = { ...this.cachedStudents[index], ...student };
     } else {
@@ -1027,11 +1024,17 @@ class StorageService {
     this.notify();
 
     if (supabase) {
+      const payload = mapToSupabaseSantri(student);
       supabase
-        .from('santri')
-        .upsert(mapToSupabaseSantri(student))
+        .from('master_santri')
+        .upsert(payload, { onConflict: 'nip_pondok' })
         .then(({ error }) => {
-          if (error) console.error('[Supabase] Error saving santri:', error);
+          if (error) {
+            // Fallback retry
+            supabase.from('master_santri').upsert(payload).then(({ error: err2 }) => {
+              if (err2) console.error('[Supabase] Error saving master_santri:', err2);
+            });
+          }
         });
     }
 
@@ -1043,7 +1046,7 @@ class StorageService {
       this.cachedStudents = deduplicateStudentsList(newStudents);
     } else {
       newStudents.forEach((st) => {
-        const idx = this.cachedStudents.findIndex((s) => s.id === st.id || s.nis === st.nis);
+        const idx = this.cachedStudents.findIndex((s) => s.id === st.id || s.nis === st.nis || (st.nipPondok && s.nipPondok === st.nipPondok));
         if (idx >= 0) {
           this.cachedStudents[idx] = { ...this.cachedStudents[idx], ...st };
         } else {
@@ -1056,11 +1059,16 @@ class StorageService {
     this.notify();
 
     if (supabase) {
+      const payloads = newStudents.map(mapToSupabaseSantri);
       supabase
-        .from('santri')
-        .upsert(newStudents.map(mapToSupabaseSantri))
+        .from('master_santri')
+        .upsert(payloads, { onConflict: 'nip_pondok' })
         .then(({ error }) => {
-          if (error) console.error('[Supabase] Error bulk saving santri:', error);
+          if (error) {
+            supabase.from('master_santri').upsert(payloads).then(({ error: err2 }) => {
+              if (err2) console.error('[Supabase] Error bulk saving master_santri:', err2);
+            });
+          }
         });
     }
 
@@ -1068,16 +1076,16 @@ class StorageService {
   }
 
   deleteStudent(idOrNis: string): boolean {
-    this.cachedStudents = this.cachedStudents.filter((s) => s.id !== idOrNis && s.nis !== idOrNis);
+    this.cachedStudents = this.cachedStudents.filter((s) => s.id !== idOrNis && s.nis !== idOrNis && s.nipPondok !== idOrNis);
     this.notify();
 
     if (supabase) {
       supabase
-        .from('santri')
+        .from('master_santri')
         .delete()
-        .or(`id.eq.${idOrNis},nis.eq.${idOrNis}`)
+        .or(`nip_pondok.eq.${idOrNis},idb.eq.${idOrNis}`)
         .then(({ error }) => {
-          if (error) console.error('[Supabase] Error deleting santri:', error);
+          if (error) console.error('[Supabase] Error deleting master_santri:', error);
         });
     }
 
@@ -1090,11 +1098,11 @@ class StorageService {
 
     if (supabase) {
       supabase
-        .from('santri')
+        .from('master_santri')
         .delete()
-        .neq('id', '0')
+        .neq('nip_pondok', '___dummy___')
         .then(({ error }) => {
-          if (error) console.error('[Supabase] Error clearing santri:', error);
+          if (error) console.error('[Supabase] Error clearing master_santri:', error);
         });
     }
 
@@ -1102,7 +1110,7 @@ class StorageService {
   }
 
   // ============================================================================
-  // TEACHERS / ASATIDZ MANAGEMENT
+  // TEACHERS / ASATIDZ MANAGEMENT (Supabase table 'master_guru')
   // ============================================================================
 
   getTeachers(): Teacher[] {
@@ -1110,7 +1118,7 @@ class StorageService {
   }
 
   saveTeacher(teacher: Teacher): boolean {
-    const idx = this.cachedTeachers.findIndex((t) => t.id === teacher.id || (teacher.nip && t.nip === teacher.nip));
+    const idx = this.cachedTeachers.findIndex((t) => t.id === teacher.id || (teacher.teacherCode && t.teacherCode === teacher.teacherCode) || (teacher.nip && t.nip === teacher.nip));
     if (idx >= 0) {
       this.cachedTeachers[idx] = { ...this.cachedTeachers[idx], ...teacher };
     } else {
@@ -1119,6 +1127,22 @@ class StorageService {
 
     this.cachedTeachers = deduplicateTeachersList(this.cachedTeachers);
     this.notify();
+
+    if (supabase) {
+      const payload = mapToSupabaseGuru(teacher);
+      supabase
+        .from('master_guru')
+        .upsert(payload, { onConflict: 'kode' })
+        .then(({ error }) => {
+          if (error) {
+            // Fallback retry
+            supabase.from('master_guru').upsert(payload).then(({ error: err2 }) => {
+              if (err2) console.error('[Supabase] Error saving master_guru:', err2);
+            });
+          }
+        });
+    }
+
     return true;
   }
 
@@ -1127,7 +1151,7 @@ class StorageService {
       this.cachedTeachers = deduplicateTeachersList(newTeachers);
     } else {
       newTeachers.forEach((t) => {
-        const idx = this.cachedTeachers.findIndex((item) => item.id === t.id || (t.nip && item.nip === t.nip));
+        const idx = this.cachedTeachers.findIndex((item) => item.id === t.id || (t.teacherCode && item.teacherCode === t.teacherCode) || (t.nip && item.nip === t.nip));
         if (idx >= 0) {
           this.cachedTeachers[idx] = { ...this.cachedTeachers[idx], ...t };
         } else {
@@ -1138,18 +1162,55 @@ class StorageService {
     }
 
     this.notify();
+
+    if (supabase) {
+      const payloads = newTeachers.map(mapToSupabaseGuru);
+      supabase
+        .from('master_guru')
+        .upsert(payloads, { onConflict: 'kode' })
+        .then(({ error }) => {
+          if (error) {
+            supabase.from('master_guru').upsert(payloads).then(({ error: err2 }) => {
+              if (err2) console.error('[Supabase] Error bulk saving master_guru:', err2);
+            });
+          }
+        });
+    }
+
     return true;
   }
 
   deleteTeacher(idOrNip: string): boolean {
-    this.cachedTeachers = this.cachedTeachers.filter((t) => t.id !== idOrNip && t.nip !== idOrNip);
+    this.cachedTeachers = this.cachedTeachers.filter((t) => t.id !== idOrNip && t.teacherCode !== idOrNip && t.nip !== idOrNip);
     this.notify();
+
+    if (supabase) {
+      supabase
+        .from('master_guru')
+        .delete()
+        .or(`kode.eq.${idOrNip}`)
+        .then(({ error }) => {
+          if (error) console.error('[Supabase] Error deleting master_guru:', error);
+        });
+    }
+
     return true;
   }
 
   deleteAllTeachers(): boolean {
     this.cachedTeachers = [];
     this.notify();
+
+    if (supabase) {
+      supabase
+        .from('master_guru')
+        .delete()
+        .neq('kode', '___dummy___')
+        .then(({ error }) => {
+          if (error) console.error('[Supabase] Error clearing master_guru:', error);
+        });
+    }
+
     return true;
   }
 

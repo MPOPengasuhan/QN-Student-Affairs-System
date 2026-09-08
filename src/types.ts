@@ -8,17 +8,18 @@ export type UserRole = 'ADMIN' | 'MUSYRIF' | 'GURU' | 'WALI_KELAS' | 'WALI_KAMAR
 
 export interface UserAccount {
   id: string;
+  no?: number | string;
   username: string; // e.g. "admin" or "GR027" or "GR146"
-  name: string; // e.g. "Ustzh. Eni Fitriyah, S.Pd.I"
+  name: string; // nama_pengguna, e.g. "Ustzh. Eni Fitriyah, S.Pd.I"
   password: string; // default "12345" or custom
-  role: UserRole;
+  role: UserRole; // role_akses
   gender: Gender;
   teacherCode?: string; // e.g. "GR027"
   nip?: string;
   phone?: string;
   position?: string; // e.g. "Wali Kelas", "Pimpinan", "Guru"
   positionDetail?: string; // e.g. "6.3", "5.4"
-  assignedRoomName?: string;
+  assignedRoomName?: string; // kamar_binaan
   avatarUrl?: string;
   isActive: boolean;
   createdAt: string;
@@ -27,18 +28,19 @@ export interface UserAccount {
 
 export interface Student {
   id: string;
+  no?: number | string;
   nis: string; // NIP PONDOK (e.g. 131232760014268544) atau NIS
-  nipPondok?: string; // NIP PONDOK
+  nipPondok?: string; // nip_pondok
   nisn?: string;
-  name: string; // NAMA SANTRI (e.g. KIRANA QURRATU' AINI)
-  className: string; // KELAS (e.g. 4-5, 5-1)
-  gender: Gender; // JK (L / P)
-  tempat?: string; // TEMPAT (QN1 / QN2)
-  idb?: string; // IDB (e.g. 23192, 12084)
-  noKartu?: string; // NO KARTU (e.g. 1002435734233363)
-  qrCodeData: string; // QR CODE (KOLOM I, e.g. CAZHIDPKYLN9RBQJC) - Presensi QR!
-  idIzin?: string; // ID IZIN (e.g. QN2/P/4.5/0413)
-  roomName?: string; // Asrama / Kamar
+  name: string; // nama_santri (e.g. KIRANA QURRATU' AINI)
+  className: string; // kelas (e.g. 4-5, 5-1)
+  gender: Gender; // jk (L / P)
+  tempat?: string; // lokasi (QN1 / QN2)
+  idb?: string; // idb (e.g. 23192, 12084)
+  noKartu?: string; // no_kartu (e.g. 1002435734233363)
+  qrCodeData: string; // qr_code (e.g. CAZHIDPKYLN9RBQJC) - Presensi QR!
+  idIzin?: string; // id_izin (e.g. QN2/P/4.5/0413)
+  roomName?: string; // kode_kamar / nama_kamar
   parentPhone?: string;
   avatarUrl?: string;
   createdAt: string;
@@ -46,13 +48,14 @@ export interface Student {
 
 export interface Teacher {
   id: string;
-  teacherCode: string; // KODE (e.g. GR006, GR027)
-  nip: string; // NIP / Kode Guru
-  name: string; // NAMA GURU (e.g. Ustzh. Eni Fitriyah, S.Pd.I)
-  gender: Gender; // JK (L / P)
-  status?: string; // STATUS (e.g. AKTIF)
-  position?: string; // JABATAN (e.g. Pimpinan, Guru, Wali Kelas, Musyrif)
-  positionDetail?: string; // KET / Keterangan Jabatan (e.g. "6.3", "5.4" jika Wali Kelas)
+  no?: number | string;
+  teacherCode: string; // kode (e.g. GR006, GR027)
+  nip: string; // kode / NIP
+  name: string; // nama_guru (e.g. Ustzh. Eni Fitriyah, S.Pd.I)
+  gender: Gender; // jk (L / P)
+  status?: string; // status (e.g. AKTIF)
+  position?: string; // jabatan (e.g. Pimpinan, Guru, Wali Kelas, Musyrif)
+  positionDetail?: string; // ket / Keterangan Jabatan (e.g. "6.3", "5.4" jika Wali Kelas)
   subject: string; // Mapel / Bidang Tugas
   phone: string; // WA / HP
   role: 'Guru' | 'Ustadz' | 'Ustadzah' | 'Wali Kamar' | 'Pengasuhan' | 'Staf' | 'Pimpinan';
@@ -63,10 +66,11 @@ export interface Teacher {
 
 export interface Room {
   id: string;
-  roomNumber: string; // NAMA KAMAR (e.g. MAJMU'AH ARABIYAH (PUTRA), BAITUL ALIM (PUTRI))
-  roomCode?: string; // KODE KAMAR (e.g. QN2-KM04, QN1-KM18)
-  location?: string; // LOKASI (e.g. QN1, QN2)
-  gender?: Gender; // JK (L / P)
+  no?: number | string;
+  roomNumber: string; // nama_kamar (e.g. MAJMU'AH ARABIYAH (PUTRA), BAITUL ALIM (PUTRI))
+  roomCode?: string; // kode_kamar (e.g. QN2-KM04, QN1-KM18)
+  location?: string; // lokasi (e.g. QN1, QN2)
+  gender?: Gender; // jk (L / P)
   building: string; // Komplek / Gedung (e.g. Komplek QN1 (Putri), Komplek QN2 (Putra))
   capacity: number; // Kapasitas santri
   supervisorName: string; // Pembina / Musyrif / Wali Kamar
@@ -75,6 +79,67 @@ export interface Room {
   description?: string;
   isFilled?: boolean;
   createdAt: string;
+}
+
+// ============================================================================
+// SUPABASE 4 TABEL UTAMA SCHEMAS
+// ============================================================================
+
+/**
+ * Tabel: users (no, username, nama_pengguna, role_akses, kamar_binaan, password)
+ * Digunakan KHUSUS untuk Autentikasi/Login dan manajemen hak akses.
+ */
+export interface SupabaseUserRow {
+  no?: number | string;
+  username: string;
+  nama_pengguna: string;
+  role_akses: string;
+  kamar_binaan?: string | null;
+  password: string;
+}
+
+/**
+ * Tabel: master_guru (no, kode, nama_guru, jk, status, jabatan, ket)
+ * Penyimpanan data biodata guru.
+ */
+export interface SupabaseMasterGuruRow {
+  no?: number | string;
+  kode: string;
+  nama_guru: string;
+  jk: string;
+  status?: string | null;
+  jabatan?: string | null;
+  ket?: string | null;
+}
+
+/**
+ * Tabel: master_kamar (no, nama_kamar, lokasi, kode_kamar, jk)
+ * Penyimpanan data kamar.
+ */
+export interface SupabaseMasterKamarRow {
+  no?: number | string;
+  nama_kamar: string;
+  lokasi?: string | null;
+  kode_kamar?: string | null;
+  jk?: string | null;
+}
+
+/**
+ * Tabel: master_santri (no, nip_pondok, nama_santri, kelas, jk, lokasi, idb, no_kartu, qr_code, id_izin, kode_kamar)
+ * Penyimpanan data santri.
+ */
+export interface SupabaseMasterSantriRow {
+  no?: number | string;
+  nip_pondok: string;
+  nama_santri: string;
+  kelas: string;
+  jk: string;
+  lokasi?: string | null;
+  idb?: string | null;
+  no_kartu?: string | null;
+  qr_code?: string | null;
+  id_izin?: string | null;
+  kode_kamar?: string | null;
 }
 
 export interface AttendanceRecord {
